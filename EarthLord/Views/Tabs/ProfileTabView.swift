@@ -47,8 +47,7 @@ struct ProfileTabView: View {
                 }
             }
             .background(Color(UIColor.systemGroupedBackground))
-            .navigationTitle("个人")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarHidden(true)
             .alert("退出登录", isPresented: $showLogoutConfirm) {
                 Button("取消", role: .cancel) { }
                 Button("退出", role: .destructive) {
@@ -195,12 +194,16 @@ struct ProfileTabView: View {
 
     private var actionsSection: some View {
         VStack(spacing: 12) {
-            actionButton(icon: "person.circle.fill", title: "编辑资料", color: .blue) {
-                // TODO: 实现编辑资料功能
+            actionButton(icon: "bell.fill", title: "通知", color: .orange) {
+                // TODO: 实现通知功能
             }
 
             actionButton(icon: "gearshape.fill", title: "设置", color: .gray) {
                 // TODO: 实现设置功能
+            }
+
+            actionButton(icon: "info.circle.fill", title: "关于", color: .purple) {
+                // TODO: 实现关于功能
             }
 
             actionButton(icon: "questionmark.circle.fill", title: "帮助与反馈", color: .green) {
