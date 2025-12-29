@@ -1,13 +1,9 @@
 import SwiftUI
 import Supabase
 
-// 初始化 Supabase 客户端
-let supabase = SupabaseClient(
-    supabaseURL: URL(string: "https://dzfylsyvnskzvpwomcim.supabase.co")!,
-    supabaseKey: "sb_publishable_KJcs3naUpYADIqbnpMeAeQ_tycx9k8o"
-)
-
 struct SupabaseTestView: View {
+    // 使用共享的 Supabase 客户端
+    private let supabase = SupabaseConfig.shared
     @State private var connectionStatus: ConnectionStatus = .idle
     @State private var debugLog: String = "点击按钮开始测试..."
 

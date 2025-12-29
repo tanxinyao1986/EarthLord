@@ -1,6 +1,6 @@
 -- ============================================
--- 地球新主 (EarthLord) 数据库迁移脚本
--- 创建时间: 2024-12-26
+-- 地球新主 (EarthLord) 数据库迁移脚本 V2
+-- 可安全重复执行
 -- ============================================
 
 -- 1. 创建 profiles 表（用户资料）
@@ -12,12 +12,17 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 -- 为 profiles 表创建索引
-CREATE INDEX idx_profiles_username ON profiles(username);
+CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
 
 -- 启用 profiles 表的 RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
--- profiles 表的 RLS 策略
+-- 删除旧策略（如果存在）
+DROP POLICY IF EXISTS "用户可以查看所有资料" ON profiles;
+DROP POLICY IF EXISTS "允许系统创建用户资料" ON profiles;
+DROP POLICY IF EXISTS "用户只能更新自己的资料" ON profiles;
+
+-- 创建新策略
 CREATE POLICY "用户可以查看所有资料"
     ON profiles FOR SELECT
     USING (true);
@@ -44,13 +49,19 @@ CREATE TABLE IF NOT EXISTS territories (
 );
 
 -- 为 territories 表创建索引
-CREATE INDEX idx_territories_user_id ON territories(user_id);
-CREATE INDEX idx_territories_created_at ON territories(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_territories_user_id ON territories(user_id);
+CREATE INDEX IF NOT EXISTS idx_territories_created_at ON territories(created_at DESC);
 
 -- 启用 territories 表的 RLS
 ALTER TABLE territories ENABLE ROW LEVEL SECURITY;
 
--- territories 表的 RLS 策略
+-- 删除旧策略
+DROP POLICY IF EXISTS "用户可以查看所有领地" ON territories;
+DROP POLICY IF EXISTS "用户只能插入自己的领地" ON territories;
+DROP POLICY IF EXISTS "用户只能更新自己的领地" ON territories;
+DROP POLICY IF EXISTS "用户只能删除自己的领地" ON territories;
+
+-- 创建新策略
 CREATE POLICY "用户可以查看所有领地"
     ON territories FOR SELECT
     USING (true);
@@ -82,14 +93,19 @@ CREATE TABLE IF NOT EXISTS pois (
 );
 
 -- 为 pois 表创建索引
-CREATE INDEX idx_pois_poi_type ON pois(poi_type);
-CREATE INDEX idx_pois_discovered_by ON pois(discovered_by);
-CREATE INDEX idx_pois_location ON pois(latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_pois_poi_type ON pois(poi_type);
+CREATE INDEX IF NOT EXISTS idx_pois_discovered_by ON pois(discovered_by);
+CREATE INDEX IF NOT EXISTS idx_pois_location ON pois(latitude, longitude);
 
 -- 启用 pois 表的 RLS
 ALTER TABLE pois ENABLE ROW LEVEL SECURITY;
 
--- pois 表的 RLS 策略
+-- 删除旧策略
+DROP POLICY IF EXISTS "所有人可以查看兴趣点" ON pois;
+DROP POLICY IF EXISTS "认证用户可以发现新兴趣点" ON pois;
+DROP POLICY IF EXISTS "发现者可以更新兴趣点" ON pois;
+
+-- 创建新策略
 CREATE POLICY "所有人可以查看兴趣点"
     ON pois FOR SELECT
     USING (true);
@@ -137,7 +153,7 @@ CREATE OR REPLACE FUNCTION calculate_distance(
 )
 RETURNS NUMERIC AS $$
 DECLARE
-    earth_radius CONSTANT NUMERIC := 6371000; -- 地球半径（米）
+    earth_radius CONSTANT NUMERIC := 6371000;
     dlat NUMERIC;
     dlon NUMERIC;
     a NUMERIC;
@@ -152,26 +168,3 @@ BEGIN
     RETURN earth_radius * c;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
-
--- ============================================
-
--- 6. 插入测试数据（可选）
--- 注意：这些是示例数据，实际使用时可以删除
-
--- 插入示例 POI 类型说明
-COMMENT ON COLUMN pois.poi_type IS '兴趣点类型: hospital(医院), supermarket(超市), factory(工厂), park(公园), bank(银行), school(学校), restaurant(餐厅)';
-
--- ============================================
-
--- 完成提示
-DO $$
-BEGIN
-    RAISE NOTICE '============================================';
-    RAISE NOTICE '数据库迁移完成！';
-    RAISE NOTICE '已创建以下表:';
-    RAISE NOTICE '  - profiles (用户资料)';
-    RAISE NOTICE '  - territories (领地)';
-    RAISE NOTICE '  - pois (兴趣点)';
-    RAISE NOTICE '所有表已启用 RLS (行级安全)';
-    RAISE NOTICE '============================================';
-END $$;
