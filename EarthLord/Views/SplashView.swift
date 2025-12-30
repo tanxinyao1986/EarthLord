@@ -10,7 +10,7 @@ import SwiftUI
 /// 启动页视图
 struct SplashView: View {
     /// 认证管理器
-    @StateObject private var authManager = AuthManager.shared
+    @ObservedObject private var authManager = AuthManager.shared
 
     /// 是否显示加载动画
     @State private var isAnimating = false

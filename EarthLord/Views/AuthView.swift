@@ -14,7 +14,7 @@ struct AuthView: View {
     // MARK: - Properties
 
     /// 认证管理器
-    @StateObject private var authManager = AuthManager.shared
+    @ObservedObject private var authManager = AuthManager.shared
 
     /// 当前选中的Tab（登录/注册）
     @State private var selectedTab: AuthTab = .login
@@ -449,7 +449,9 @@ struct AuthView: View {
                     backgroundColor: .white,
                     foregroundColor: .black,
                     action: {
-                        showToastMessage("Google 登录即将开放")
+                        Task {
+                            await authManager.signInWithGoogle()
+                        }
                     }
                 )
             }

@@ -9,7 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     /// 认证管理器
-    @StateObject private var authManager = AuthManager.shared
+    @ObservedObject private var authManager = AuthManager.shared
 
     /// 是否显示删除账户确认对话框
     @State private var showDeleteConfirm = false

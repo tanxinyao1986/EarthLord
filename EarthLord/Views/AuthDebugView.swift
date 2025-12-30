@@ -10,7 +10,7 @@ import Supabase
 import Auth
 
 struct AuthDebugView: View {
-    @StateObject private var authManager = AuthManager.shared
+    @ObservedObject private var authManager = AuthManager.shared
     @State private var testEmail = ""
     @State private var testPassword = "test123456"
     @State private var debugLog = ""
