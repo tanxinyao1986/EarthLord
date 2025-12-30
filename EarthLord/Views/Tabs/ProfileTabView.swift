@@ -198,8 +198,28 @@ struct ProfileTabView: View {
                 // TODO: 实现通知功能
             }
 
-            actionButton(icon: "gearshape.fill", title: "设置", color: .gray) {
-                // TODO: 实现设置功能
+            // 设置 - 使用 NavigationLink
+            NavigationLink(destination: SettingsView()) {
+                HStack(spacing: 15) {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.gray)
+                        .frame(width: 30)
+
+                    Text("设置")
+                        .font(.system(size: 16))
+                        .foregroundColor(.primary)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 15)
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .cornerRadius(12)
             }
 
             actionButton(icon: "info.circle.fill", title: "关于", color: .purple) {

@@ -377,6 +377,73 @@ class AuthManager: ObservableObject {
         isLoading = false
     }
 
+    /// 删除账户
+    /// - Returns: 是否删除成功
+    func deleteAccount() async -> Bool {
+        isLoading = true
+        errorMessage = nil
+
+        print("🗑️ 开始删除账户...")
+
+        do {
+            // 获取当前会话 token
+            let session = try await supabase.auth.session
+            let accessToken = session.accessToken
+            print("📝 已获取会话 token")
+
+            // 构建边缘函数 URL
+            let functionUrl = URL(string: "https://dzfylsyvnskzvpwomcim.supabase.co/functions/v1/delete-account")!
+            print("🌐 正在调用 delete-account 边缘函数...")
+
+            // 创建请求
+            var request = URLRequest(url: functionUrl)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+            // 发送请求
+            let (data, response) = try await URLSession.shared.data(for: request)
+            print("📥 收到响应")
+
+            // 检查 HTTP 状态码
+            if let httpResponse = response as? HTTPURLResponse {
+                print("📊 HTTP 状态码: \(httpResponse.statusCode)")
+
+                if httpResponse.statusCode == 200 {
+                    // 解析响应
+                    let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                    print("📊 响应数据: \(json ?? [:])")
+
+                    if let success = json?["success"] as? Bool, success {
+                        // 删除成功，清空本地状态
+                        isAuthenticated = false
+                        needsPasswordSetup = false
+                        currentUser = nil
+                        otpSent = false
+                        otpVerified = false
+
+                        print("✅ 账户已成功删除")
+                        isLoading = false
+                        return true
+                    }
+                } else {
+                    // 解析错误响应
+                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                    let errorMsg = json?["error"] as? String ?? "HTTP \(httpResponse.statusCode)"
+                    errorMessage = "删除账户失败: \(errorMsg)"
+                    print("❌ 删除账户失败: \(errorMsg)")
+                }
+            }
+
+        } catch {
+            errorMessage = "删除账户时发生错误: \(error.localizedDescription)"
+            print("❌ 删除账户错误: \(error)")
+        }
+
+        isLoading = false
+        return false
+    }
+
     /// 检查会话状态
     /// - Note: 在应用启动时调用，恢复用户登录状态
     func checkSession() async {
@@ -484,6 +551,11 @@ class AuthManager: ObservableObject {
         case .mfaChallengeVerified:
             // MFA验证
             print("🔐 Auth状态变化: MFA验证完成")
+
+        case .initialSession:
+            // 初始会话
+            print("🔵 Auth状态变化: 初始会话")
+            await checkSession()
 
         @unknown default:
             print("⚠️ Auth状态变化: 未知状态")
