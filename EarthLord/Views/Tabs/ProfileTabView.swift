@@ -11,6 +11,9 @@ struct ProfileTabView: View {
     /// 认证管理器
     @ObservedObject private var authManager = AuthManager.shared
 
+    /// 语言管理器
+    @ObservedObject private var languageManager = LanguageManager.shared
+
     /// 是否显示退出登录确认
     @State private var showLogoutConfirm = false
 
@@ -48,14 +51,20 @@ struct ProfileTabView: View {
             }
             .background(Color(UIColor.systemGroupedBackground))
             .navigationBarHidden(true)
-            .alert("退出登录", isPresented: $showLogoutConfirm) {
-                Button("取消", role: .cancel) { }
-                Button("退出", role: .destructive) {
+            .alert(Text("退出登录".localized()), isPresented: $showLogoutConfirm) {
+                Button(role: .cancel) {
+                } label: {
+                    Text("取消".localized())
+                }
+                Button(role: .destructive) {
                     handleLogout()
+                } label: {
+                    Text("退出".localized())
                 }
             } message: {
-                Text("确定要退出登录吗？")
+                Text("确定要退出登录吗？".localized())
             }
+            .refreshOnLanguageChange()
         }
     }
 
@@ -110,7 +119,7 @@ struct ProfileTabView: View {
             }
 
             // 用户名
-            Text(authManager.currentUser?.username ?? "未设置用户名")
+            Text(authManager.currentUser?.username ?? "未设置用户名".localized())
                 .font(.system(size: 24, weight: .bold))
                 .foregroundColor(.primary)
 
@@ -162,9 +171,9 @@ struct ProfileTabView: View {
 
     private var statsSection: some View {
         HStack(spacing: 15) {
-            statItem(title: "领地", value: "0", icon: "map.fill")
-            statItem(title: "探索", value: "0", icon: "location.fill")
-            statItem(title: "成就", value: "0", icon: "trophy.fill")
+            statItem(title: "领地".localized(), value: "0", icon: "map.fill")
+            statItem(title: "探索".localized(), value: "0", icon: "location.fill")
+            statItem(title: "成就".localized(), value: "0", icon: "trophy.fill")
         }
         .padding(.vertical, 20)
         .padding(.horizontal, 15)
@@ -194,7 +203,7 @@ struct ProfileTabView: View {
 
     private var actionsSection: some View {
         VStack(spacing: 12) {
-            actionButton(icon: "bell.fill", title: "通知", color: .orange) {
+            actionButton(icon: "bell.fill", title: "通知".localized(), color: .orange) {
                 // TODO: 实现通知功能
             }
 
@@ -206,7 +215,7 @@ struct ProfileTabView: View {
                         .foregroundColor(.gray)
                         .frame(width: 30)
 
-                    Text("设置")
+                    Text("设置".localized())
                         .font(.system(size: 16))
                         .foregroundColor(.primary)
 
@@ -222,11 +231,11 @@ struct ProfileTabView: View {
                 .cornerRadius(12)
             }
 
-            actionButton(icon: "info.circle.fill", title: "关于", color: .purple) {
+            actionButton(icon: "info.circle.fill", title: "关于".localized(), color: .purple) {
                 // TODO: 实现关于功能
             }
 
-            actionButton(icon: "questionmark.circle.fill", title: "帮助与反馈", color: .green) {
+            actionButton(icon: "questionmark.circle.fill", title: "帮助与反馈".localized(), color: .green) {
                 // TODO: 实现帮助功能
             }
         }
@@ -270,7 +279,7 @@ struct ProfileTabView: View {
                         .font(.system(size: 22))
                 }
 
-                Text("退出登录")
+                Text("退出登录".localized())
                     .font(.system(size: 16, weight: .semibold))
             }
             .foregroundColor(.white)

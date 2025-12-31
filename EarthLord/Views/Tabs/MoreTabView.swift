@@ -11,6 +11,9 @@ struct MoreTabView: View {
     /// 认证管理器
     @ObservedObject private var authManager = AuthManager.shared
 
+    /// 语言管理器
+    @ObservedObject private var languageManager = LanguageManager.shared
+
     /// 是否显示退出登录确认
     @State private var showLogoutConfirm = false
 
@@ -24,29 +27,45 @@ struct MoreTabView: View {
                 userProfileSection
 
                 // 开发测试区域
-                Section("开发测试") {
+                Section {
                     NavigationLink(destination: SupabaseTestView()) {
-                        Label("Supabase 连接测试", systemImage: "network")
+                        Label {
+                            Text("Supabase 连接测试".localized())
+                        } icon: {
+                            Image(systemName: "network")
+                        }
                     }
 
                     NavigationLink(destination: AuthDebugView()) {
-                        Label("认证调试工具", systemImage: "person.badge.shield.checkmark")
+                        Label {
+                            Text("认证调试工具".localized())
+                        } icon: {
+                            Image(systemName: "person.badge.shield.checkmark")
+                        }
                     }
+                } header: {
+                    Text("开发测试".localized())
                 }
 
                 // 退出登录
                 logoutSection
             }
-            .navigationTitle("更多")
-            .alert("退出登录", isPresented: $showLogoutConfirm) {
-                Button("取消", role: .cancel) { }
-                Button("退出", role: .destructive) {
+            .navigationTitle(Text("更多".localized()))
+            .alert(Text("退出登录".localized()), isPresented: $showLogoutConfirm) {
+                Button {
+                } label: {
+                    Text("取消".localized())
+                }
+                Button(role: .destructive) {
                     handleLogout()
+                } label: {
+                    Text("退出".localized())
                 }
             } message: {
-                Text("确定要退出登录吗？")
+                Text("确定要退出登录吗？".localized())
             }
             .disabled(isLoggingOut)
+            .refreshOnLanguageChange()
         }
     }
 
@@ -88,7 +107,7 @@ struct MoreTabView: View {
 
                 // 用户信息
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(authManager.currentUser?.username ?? "未设置用户名")
+                    Text(authManager.currentUser?.username ?? "未设置用户名".localized())
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.primary)
 
@@ -101,7 +120,7 @@ struct MoreTabView: View {
             }
             .padding(.vertical, 8)
         } header: {
-            Text("个人信息")
+            Text("个人信息".localized())
         }
     }
 
@@ -128,7 +147,7 @@ struct MoreTabView: View {
                             .foregroundColor(.red)
                     }
 
-                    Text("退出登录")
+                    Text("退出登录".localized())
                         .foregroundColor(.red)
                 }
             }

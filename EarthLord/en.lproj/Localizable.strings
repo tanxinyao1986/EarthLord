@@ -1,0 +1,50 @@
+/* Main Tab Bar */
+"地图" = "Map";
+"领地" = "Territory";
+"个人" = "Profile";
+"更多" = "More";
+
+/* Map Tab */
+"探索和圈占领地" = "Explore and claim territories";
+
+/* Territory Tab */
+"管理你的领地" = "Manage your territories";
+
+/* Profile Tab */
+"未设置用户名" = "Username not set";
+"探索" = "Explore";
+"成就" = "Achievements";
+"通知" = "Notifications";
+"设置" = "Settings";
+"关于" = "About";
+"帮助与反馈" = "Help & Feedback";
+"退出登录" = "Log Out";
+"确定要退出登录吗？" = "Are you sure you want to log out?";
+"取消" = "Cancel";
+"退出" = "Exit";
+
+/* More Tab */
+"开发测试" = "Development Test";
+"Supabase 连接测试" = "Supabase Connection Test";
+"认证调试工具" = "Auth Debug Tool";
+"个人信息" = "Personal Info";
+"邮箱" = "Email";
+"用户名" = "Username";
+"未设置" = "Not set";
+"用户ID" = "User ID";
+
+/* Settings */
+"账户信息" = "Account Info";
+"语言" = "Language";
+"跟随系统" = "Follow System";
+"简体中文" = "Simplified Chinese";
+"English" = "English";
+"危险区域" = "Danger Zone";
+"删除账户" = "Delete Account";
+"删除账户后，您的所有数据将被永久删除且无法恢复。此操作不可撤销。" = "After deleting your account, all your data will be permanently deleted and cannot be recovered. This action is irreversible.";
+"确认删除账户" = "Confirm Account Deletion";
+"此操作将永久删除您的账户和所有相关数据，且无法恢复。" = "This action will permanently delete your account and all related data, and cannot be undone.";
+"请输入 \"删除\" 以确认" = "Type \"DELETE\" to confirm";
+"删除" = "DELETE";
+"确认删除" = "Confirm Deletion";
+"确定" = "Confirm";
