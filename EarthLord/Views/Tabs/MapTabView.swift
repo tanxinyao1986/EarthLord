@@ -25,7 +25,10 @@ struct MapTabView: View {
             if locationManager.isAuthorized {
                 MapViewRepresentable(
                     userLocation: $userLocation,
-                    hasLocatedUser: $hasLocatedUser
+                    hasLocatedUser: $hasLocatedUser,
+                    trackingPath: $locationManager.pathCoordinates,
+                    pathUpdateVersion: locationManager.pathUpdateVersion,
+                    isTracking: locationManager.isTracking
                 )
                 .edgesIgnoringSafeArea(.all)
             } else {
@@ -51,14 +54,20 @@ struct MapTabView: View {
                 }
             }
 
-            // 右下角：定位按钮
+            // 右下角：按钮组（圈地按钮 + 定位按钮）
             VStack {
                 Spacer()
                 HStack {
                     Spacer()
-                    locationButton
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 100)
+                    VStack(spacing: 16) {
+                        // 圈地按钮
+                        territoryButton
+
+                        // 定位按钮
+                        locationButton
+                    }
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 100)
                 }
             }
         }
@@ -140,6 +149,44 @@ struct MapTabView: View {
             ApocalypseTheme.cardBackground
                 .cornerRadius(16)
         )
+    }
+
+    /// 圈地按钮
+    private var territoryButton: some View {
+        Button {
+            // 切换追踪状态
+            if locationManager.isTracking {
+                locationManager.stopPathTracking()
+            } else {
+                locationManager.startPathTracking()
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: locationManager.isTracking ? "stop.fill" : "flag.fill")
+                    .font(.system(size: 16, weight: .semibold))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(locationManager.isTracking ? "停止圈地" : "开始圈地")
+                        .font(.system(size: 14, weight: .bold))
+
+                    if locationManager.isTracking && locationManager.pathCoordinates.count > 0 {
+                        Text("\(locationManager.pathCoordinates.count) 个点")
+                            .font(.system(size: 11))
+                            .opacity(0.9)
+                    }
+                }
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                locationManager.isTracking
+                    ? Color.red
+                    : ApocalypseTheme.primary
+            )
+            .cornerRadius(25)
+            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+        }
     }
 
     /// 右下角定位按钮

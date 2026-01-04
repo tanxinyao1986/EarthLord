@@ -16,6 +16,15 @@ struct MapViewRepresentable: UIViewRepresentable {
     /// 是否已完成首次定位（防止重复居中）
     @Binding var hasLocatedUser: Bool
 
+    /// 路径追踪坐标数组（WGS-84 原始坐标）
+    @Binding var trackingPath: [CLLocationCoordinate2D]
+
+    /// 路径更新版本号（触发重新渲染）
+    var pathUpdateVersion: Int
+
+    /// 是否正在追踪
+    var isTracking: Bool
+
     // MARK: - UIViewRepresentable 协议方法
 
     /// 创建 MKMapView
@@ -41,9 +50,10 @@ struct MapViewRepresentable: UIViewRepresentable {
         return mapView
     }
 
-    /// 更新 MKMapView（空实现即可）
+    /// 更新 MKMapView（当路径更新时调用）
     func updateUIView(_ uiView: MKMapView, context: Context) {
-        // 不需要在这里做任何事，位置更新由 Coordinator 处理
+        // 当路径更新版本号变化时，重新渲染轨迹
+        context.coordinator.updateTrackingPath(on: uiView, path: trackingPath)
     }
 
     /// 创建 Coordinator（代理处理器）
@@ -123,6 +133,43 @@ struct MapViewRepresentable: UIViewRepresentable {
         /// 地图加载完成时调用
         func mapViewDidFinishLoadingMap(_ mapView: MKMapView) {
             print("✅ 地图加载完成")
+        }
+
+        // MARK: - 轨迹渲染方法
+
+        /// 更新地图上的追踪轨迹
+        func updateTrackingPath(on mapView: MKMapView, path: [CLLocationCoordinate2D]) {
+            // 移除旧的轨迹线
+            let oldOverlays = mapView.overlays
+            mapView.removeOverlays(oldOverlays)
+
+            // 如果路径为空或只有一个点，不绘制
+            guard path.count >= 2 else { return }
+
+            // ⚠️ 关键：将 WGS-84 坐标转换为 GCJ-02 坐标
+            let gcj02Path = CoordinateConverter.wgs84ArrayToGcj02(path)
+
+            // 创建轨迹线（MKPolyline）
+            let polyline = MKPolyline(coordinates: gcj02Path, count: gcj02Path.count)
+
+            // 添加到地图
+            mapView.addOverlay(polyline)
+
+            print("🎨 绘制轨迹线，共 \(path.count) 个点")
+        }
+
+        /// ⭐⭐⭐ 关键方法：为轨迹线提供渲染器（否则轨迹不显示！）
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let polyline = overlay as? MKPolyline {
+                let renderer = MKPolylineRenderer(polyline: polyline)
+                renderer.strokeColor = UIColor.cyan  // 青色轨迹（末日科技感）
+                renderer.lineWidth = 5  // 线宽
+                renderer.lineCap = .round  // 圆头
+                return renderer
+            }
+
+            // 默认渲染器
+            return MKOverlayRenderer(overlay: overlay)
         }
     }
 }
