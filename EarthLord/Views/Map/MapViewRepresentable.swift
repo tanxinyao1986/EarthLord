@@ -25,6 +25,9 @@ struct MapViewRepresentable: UIViewRepresentable {
     /// 是否正在追踪
     var isTracking: Bool
 
+    /// 路径是否已闭合
+    var isPathClosed: Bool
+
     // MARK: - UIViewRepresentable 协议方法
 
     /// 创建 MKMapView
@@ -53,7 +56,7 @@ struct MapViewRepresentable: UIViewRepresentable {
     /// 更新 MKMapView（当路径更新时调用）
     func updateUIView(_ uiView: MKMapView, context: Context) {
         // 当路径更新版本号变化时，重新渲染轨迹
-        context.coordinator.updateTrackingPath(on: uiView, path: trackingPath)
+        context.coordinator.updateTrackingPath(on: uiView, path: trackingPath, isClosed: isPathClosed)
     }
 
     /// 创建 Coordinator（代理处理器）
@@ -138,8 +141,8 @@ struct MapViewRepresentable: UIViewRepresentable {
         // MARK: - 轨迹渲染方法
 
         /// 更新地图上的追踪轨迹
-        func updateTrackingPath(on mapView: MKMapView, path: [CLLocationCoordinate2D]) {
-            // 移除旧的轨迹线
+        func updateTrackingPath(on mapView: MKMapView, path: [CLLocationCoordinate2D], isClosed: Bool) {
+            // 移除旧的轨迹线和多边形
             let oldOverlays = mapView.overlays
             mapView.removeOverlays(oldOverlays)
 
@@ -155,16 +158,40 @@ struct MapViewRepresentable: UIViewRepresentable {
             // 添加到地图
             mapView.addOverlay(polyline)
 
-            print("🎨 绘制轨迹线，共 \(path.count) 个点")
+            print("🎨 绘制轨迹线，共 \(path.count) 个点，闭环状态：\(isClosed)")
+
+            // ⭐ 如果路径已闭合且点数 >= 3，创建多边形填充
+            if isClosed && gcj02Path.count >= 3 {
+                let polygon = MKPolygon(coordinates: gcj02Path, count: gcj02Path.count)
+                mapView.addOverlay(polygon)
+                print("🎨 绘制多边形填充")
+            }
         }
 
         /// ⭐⭐⭐ 关键方法：为轨迹线提供渲染器（否则轨迹不显示！）
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            // 处理轨迹线
             if let polyline = overlay as? MKPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
-                renderer.strokeColor = UIColor.cyan  // 青色轨迹（末日科技感）
+
+                // ⭐ 根据闭环状态改变轨迹颜色
+                if parent.isPathClosed {
+                    renderer.strokeColor = UIColor.systemGreen  // 绿色轨迹（闭环成功）
+                } else {
+                    renderer.strokeColor = UIColor.systemCyan  // 青色轨迹（正在追踪）
+                }
+
                 renderer.lineWidth = 5  // 线宽
                 renderer.lineCap = .round  // 圆头
+                return renderer
+            }
+
+            // 处理多边形填充
+            if let polygon = overlay as? MKPolygon {
+                let renderer = MKPolygonRenderer(polygon: polygon)
+                renderer.fillColor = UIColor.systemGreen.withAlphaComponent(0.25)  // 半透明绿色填充
+                renderer.strokeColor = UIColor.systemGreen  // 绿色边框
+                renderer.lineWidth = 2  // 边框线宽
                 return renderer
             }
 

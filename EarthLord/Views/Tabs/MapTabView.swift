@@ -28,7 +28,8 @@ struct MapTabView: View {
                     hasLocatedUser: $hasLocatedUser,
                     trackingPath: $locationManager.pathCoordinates,
                     pathUpdateVersion: locationManager.pathUpdateVersion,
-                    isTracking: locationManager.isTracking
+                    isTracking: locationManager.isTracking,
+                    isPathClosed: locationManager.isPathClosed
                 )
                 .edgesIgnoringSafeArea(.all)
             } else {
@@ -38,11 +39,18 @@ struct MapTabView: View {
             }
 
             // 前景：UI 元素
-            VStack(spacing: 0) {
+            VStack(spacing: 12) {
                 // 顶部标题栏
                 headerView
                     .padding(.top, 50)
                     .padding(.horizontal, 20)
+
+                // 速度警告横幅
+                if locationManager.speedWarning != nil {
+                    speedWarningBanner
+                        .padding(.horizontal, 20)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
 
                 Spacer()
 
@@ -206,6 +214,42 @@ struct MapTabView: View {
                 .background(ApocalypseTheme.primary)
                 .clipShape(Circle())
                 .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+        }
+    }
+
+    /// 速度警告横幅
+    private var speedWarningBanner: some View {
+        HStack(spacing: 12) {
+            // 警告图标
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(.white)
+
+            // 警告文字
+            Text(locationManager.speedWarning ?? "")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+                .lineLimit(2)
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            // 根据是否还在追踪显示不同颜色
+            locationManager.isTracking
+                ? Color.orange  // 黄色：警告但还在追踪
+                : Color.red     // 红色：已暂停追踪
+        )
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+        .onAppear {
+            // 3 秒后自动消失
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                withAnimation {
+                    locationManager.speedWarning = nil
+                }
+            }
         }
     }
 

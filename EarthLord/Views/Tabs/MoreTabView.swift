@@ -28,6 +28,14 @@ struct MoreTabView: View {
 
                 // 开发测试区域
                 Section {
+                    NavigationLink(destination: LogView()) {
+                        Label {
+                            Text("运行日志".localized())
+                        } icon: {
+                            Image(systemName: "text.alignleft")
+                        }
+                    }
+
                     NavigationLink(destination: SupabaseTestView()) {
                         Label {
                             Text("Supabase 连接测试".localized())
