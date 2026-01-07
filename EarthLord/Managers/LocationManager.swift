@@ -128,14 +128,24 @@ class LocationManager: NSObject, ObservableObject {
         LogManager.shared.info("开始圈地追踪")
     }
 
-    /// 停止追踪路径（停止定时器）
+    /// 停止追踪路径（停止定时器并重置所有状态）
     func stopPathTracking() {
         isTracking = false
         pathUpdateTimer?.invalidate()
         pathUpdateTimer = nil
 
-        print("⏹️ 停止路径追踪，共记录 \(pathCoordinates.count) 个点")
-        LogManager.shared.info("停止追踪，共记录 \(pathCoordinates.count) 个点")
+        // 重置验证状态
+        territoryValidationPassed = false
+        territoryValidationError = nil
+        calculatedArea = 0
+
+        // 清除路径数据
+        pathCoordinates.removeAll()
+        pathUpdateVersion += 1
+        isPathClosed = false
+
+        print("⏹️ 停止路径追踪并重置所有状态")
+        LogManager.shared.info("停止追踪并重置状态")
     }
 
     /// 清除路径
