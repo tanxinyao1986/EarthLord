@@ -29,6 +29,18 @@ struct MapTabView: View {
     // 领地相关状态
     @State private var territories: [Territory] = []
 
+    // MARK: - Day 19: 碰撞检测状态
+    @State private var collisionCheckTimer: Timer?
+    @State private var collisionWarning: String?
+    @State private var showCollisionWarning = false
+    @State private var collisionWarningLevel: WarningLevel = .safe
+    @State private var trackingStartTime: Date?
+
+    // 当前用户 ID
+    private var currentUserId: String? {
+        authManager.currentUser?.id.uuidString
+    }
+
     // MARK: - 视图主体
 
     var body: some View {
@@ -81,6 +93,11 @@ struct MapTabView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 30)
                 }
+            }
+
+            // Day 19: 碰撞警告横幅（分级颜色）
+            if showCollisionWarning, let warning = collisionWarning {
+                collisionWarningBanner(message: warning, level: collisionWarningLevel)
             }
 
             // 右下角：按钮组（确认登记按钮 + 圈地按钮 + 定位按钮）
@@ -233,9 +250,12 @@ struct MapTabView: View {
         Button {
             // 切换追踪状态
             if locationManager.isTracking {
+                // Day 19: 停止追踪时完全停止碰撞监控
+                stopCollisionMonitoring()
                 locationManager.stopPathTracking()
             } else {
-                locationManager.startPathTracking()
+                // Day 19: 开始圈地前检测起始点
+                startClaimingWithCollisionCheck()
             }
         } label: {
             HStack(spacing: 8) {
@@ -270,7 +290,7 @@ struct MapTabView: View {
     private var locationButton: some View {
         Button {
             // 重新居中到用户位置
-            if let location = userLocation {
+            if userLocation != nil {
                 hasLocatedUser = false  // 重置标志，允许重新居中
             } else {
                 locationManager.startUpdatingLocation()
@@ -430,6 +450,7 @@ struct MapTabView: View {
             showUploadAlert = true
 
             // ⚠️ 关键：上传成功后必须停止追踪！
+            stopCollisionMonitoring()  // Day 19: 停止碰撞监控
             locationManager.stopPathTracking()
 
             LogManager.shared.success("领地登记成功！面积: \(Int(locationManager.calculatedArea))m²")
@@ -460,6 +481,238 @@ struct MapTabView: View {
             TerritoryLogger.shared.log("加载领地失败: \(error.localizedDescription)", type: .error)
             LogManager.shared.error("加载领地失败: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - Day 19: 碰撞检测方法
+
+    /// Day 19: 带碰撞检测的开始圈地
+    private func startClaimingWithCollisionCheck() {
+        guard let location = locationManager.userLocation,
+              let userId = currentUserId else {
+            return
+        }
+
+        // 检测起始点是否在他人领地内
+        let result = territoryManager.checkPointCollision(
+            location: location,
+            currentUserId: userId
+        )
+
+        if result.hasCollision {
+            // 起点在他人领地内，显示错误并震动
+            collisionWarning = result.message
+            collisionWarningLevel = .violation
+            showCollisionWarning = true
+
+            // 错误震动
+            let generator = UINotificationFeedbackGenerator()
+            generator.prepare()
+            generator.notificationOccurred(.error)
+
+            TerritoryLogger.shared.log("起点碰撞：阻止圈地", type: .error)
+
+            // 3秒后隐藏警告
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                showCollisionWarning = false
+                collisionWarning = nil
+                collisionWarningLevel = .safe
+            }
+
+            return
+        }
+
+        // 起点安全，开始圈地
+        TerritoryLogger.shared.log("起始点安全，开始圈地", type: .info)
+        trackingStartTime = Date()
+        locationManager.startPathTracking()
+        startCollisionMonitoring()
+    }
+
+    /// Day 19: 启动碰撞检测监控
+    private func startCollisionMonitoring() {
+        // 先停止已有定时器
+        stopCollisionCheckTimer()
+
+        // 每 10 秒检测一次
+        collisionCheckTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [self] _ in
+            performCollisionCheck()
+        }
+
+        TerritoryLogger.shared.log("碰撞检测定时器已启动", type: .info)
+    }
+
+    /// Day 19: 仅停止定时器（不清除警告状态）
+    private func stopCollisionCheckTimer() {
+        collisionCheckTimer?.invalidate()
+        collisionCheckTimer = nil
+        TerritoryLogger.shared.log("碰撞检测定时器已停止", type: .info)
+    }
+
+    /// Day 19: 完全停止碰撞监控（停止定时器 + 清除警告）
+    private func stopCollisionMonitoring() {
+        stopCollisionCheckTimer()
+        // 清除警告状态
+        showCollisionWarning = false
+        collisionWarning = nil
+        collisionWarningLevel = .safe
+    }
+
+    /// Day 19: 执行碰撞检测
+    private func performCollisionCheck() {
+        guard locationManager.isTracking,
+              let userId = currentUserId else {
+            return
+        }
+
+        let path = locationManager.pathCoordinates
+        guard path.count >= 2 else { return }
+
+        let result = territoryManager.checkPathCollisionComprehensive(
+            path: path,
+            currentUserId: userId
+        )
+
+        // 根据预警级别处理
+        switch result.warningLevel {
+        case .safe:
+            // 安全，隐藏警告横幅
+            showCollisionWarning = false
+            collisionWarning = nil
+            collisionWarningLevel = .safe
+
+        case .caution:
+            // 注意（50-100m）- 黄色横幅 + 轻震 1 次
+            collisionWarning = result.message
+            collisionWarningLevel = .caution
+            showCollisionWarning = true
+            triggerHapticFeedback(level: .caution)
+
+        case .warning:
+            // 警告（25-50m）- 橙色横幅 + 中震 2 次
+            collisionWarning = result.message
+            collisionWarningLevel = .warning
+            showCollisionWarning = true
+            triggerHapticFeedback(level: .warning)
+
+        case .danger:
+            // 危险（<25m）- 红色横幅 + 强震 3 次
+            collisionWarning = result.message
+            collisionWarningLevel = .danger
+            showCollisionWarning = true
+            triggerHapticFeedback(level: .danger)
+
+        case .violation:
+            // 【关键修复】违规处理 - 必须先显示横幅，再停止！
+
+            // 1. 先设置警告状态（让横幅显示出来）
+            collisionWarning = result.message
+            collisionWarningLevel = .violation
+            showCollisionWarning = true
+
+            // 2. 触发震动
+            triggerHapticFeedback(level: .violation)
+
+            // 3. 只停止定时器，不清除警告状态！
+            stopCollisionCheckTimer()
+
+            // 4. 停止圈地追踪
+            locationManager.stopPathTracking()
+            trackingStartTime = nil
+
+            TerritoryLogger.shared.log("碰撞违规，自动停止圈地", type: .error)
+
+            // 5. 5秒后再清除警告横幅
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                showCollisionWarning = false
+                collisionWarning = nil
+                collisionWarningLevel = .safe
+            }
+        }
+    }
+
+    /// Day 19: 触发震动反馈
+    private func triggerHapticFeedback(level: WarningLevel) {
+        switch level {
+        case .safe:
+            // 安全：无震动
+            break
+
+        case .caution:
+            // 注意：轻震 1 次
+            let generator = UINotificationFeedbackGenerator()
+            generator.prepare()
+            generator.notificationOccurred(.warning)
+
+        case .warning:
+            // 警告：中震 2 次
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.prepare()
+            generator.impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                generator.impactOccurred()
+            }
+
+        case .danger:
+            // 危险：强震 3 次
+            let generator = UIImpactFeedbackGenerator(style: .heavy)
+            generator.prepare()
+            generator.impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                generator.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                generator.impactOccurred()
+            }
+
+        case .violation:
+            // 违规：错误震动
+            let generator = UINotificationFeedbackGenerator()
+            generator.prepare()
+            generator.notificationOccurred(.error)
+        }
+    }
+
+    /// Day 19: 碰撞警告横幅（分级颜色）
+    private func collisionWarningBanner(message: String, level: WarningLevel) -> some View {
+        // 根据级别确定颜色
+        let backgroundColor: Color
+        switch level {
+        case .safe:
+            backgroundColor = .green
+        case .caution:
+            backgroundColor = .yellow
+        case .warning:
+            backgroundColor = .orange
+        case .danger, .violation:
+            backgroundColor = .red
+        }
+
+        // 根据级别确定文字颜色（黄色背景用黑字）
+        let textColor: Color = (level == .caution) ? .black : .white
+
+        // 根据级别确定图标
+        let iconName = (level == .violation) ? "xmark.octagon.fill" : "exclamationmark.triangle.fill"
+
+        return VStack {
+            HStack {
+                Image(systemName: iconName)
+                    .font(.system(size: 18))
+
+                Text(message)
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundColor(textColor)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(backgroundColor.opacity(0.95))
+            .cornerRadius(25)
+            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+            .padding(.top, 120)
+
+            Spacer()
+        }
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .animation(.easeInOut(duration: 0.3), value: showCollisionWarning)
     }
 }
 
