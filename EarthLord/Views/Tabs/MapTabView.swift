@@ -13,6 +13,7 @@ struct MapTabView: View {
 
     @StateObject private var locationManager = LocationManager()
     @ObservedObject private var languageManager = LanguageManager.shared
+    @ObservedObject private var authManager = AuthManager.shared
     private let territoryManager = TerritoryManager.shared
 
     @State private var userLocation: CLLocationCoordinate2D?  // 用户位置
@@ -24,6 +25,9 @@ struct MapTabView: View {
     @State private var uploadError: String?
     @State private var uploadSuccess: Bool = false
     @State private var showUploadAlert: Bool = false
+
+    // 领地相关状态
+    @State private var territories: [Territory] = []
 
     // MARK: - 视图主体
 
@@ -37,7 +41,9 @@ struct MapTabView: View {
                     trackingPath: $locationManager.pathCoordinates,
                     pathUpdateVersion: locationManager.pathUpdateVersion,
                     isTracking: locationManager.isTracking,
-                    isPathClosed: locationManager.isPathClosed
+                    isPathClosed: locationManager.isPathClosed,
+                    territories: territories,
+                    currentUserId: authManager.currentUser?.id.uuidString
                 )
                 .edgesIgnoringSafeArea(.all)
             } else {
@@ -126,6 +132,11 @@ struct MapTabView: View {
                 locationManager.requestPermission()
             } else if locationManager.isAuthorized {
                 locationManager.startUpdatingLocation()
+            }
+
+            // 加载所有领地
+            Task {
+                await loadTerritories()
             }
         }
         .onReceive(locationManager.$isPathClosed) { isClosed in
@@ -423,6 +434,9 @@ struct MapTabView: View {
 
             LogManager.shared.success("领地登记成功！面积: \(Int(locationManager.calculatedArea))m²")
 
+            // 刷新领地列表
+            await loadTerritories()
+
         } catch {
             // 上传失败
             uploadError = error.localizedDescription
@@ -432,6 +446,20 @@ struct MapTabView: View {
         }
 
         isUploading = false
+    }
+
+    // MARK: - 领地加载方法
+
+    /// 从云端加载所有领地
+    private func loadTerritories() async {
+        do {
+            territories = try await territoryManager.loadAllTerritories()
+            TerritoryLogger.shared.log("加载了 \(territories.count) 个领地", type: .info)
+            LogManager.shared.info("加载了 \(territories.count) 个领地")
+        } catch {
+            TerritoryLogger.shared.log("加载领地失败: \(error.localizedDescription)", type: .error)
+            LogManager.shared.error("加载领地失败: \(error.localizedDescription)")
+        }
     }
 }
 
