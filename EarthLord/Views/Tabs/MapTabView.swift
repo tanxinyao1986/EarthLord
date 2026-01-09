@@ -29,6 +29,10 @@ struct MapTabView: View {
     // 领地相关状态
     @State private var territories: [Territory] = []
 
+    // 探索相关状态
+    @State private var isExploring: Bool = false
+    @State private var showExplorationResult: Bool = false
+
     // MARK: - Day 19: 碰撞检测状态
     @State private var collisionCheckTimer: Timer?
     @State private var collisionWarning: String?
@@ -100,27 +104,32 @@ struct MapTabView: View {
                 collisionWarningBanner(message: warning, level: collisionWarningLevel)
             }
 
-            // 右下角：按钮组（确认登记按钮 + 圈地按钮 + 定位按钮）
-            VStack {
-                Spacer()
-                HStack {
+            // 右下角：确认登记按钮（独立显示）
+            if locationManager.territoryValidationPassed {
+                VStack {
                     Spacer()
-                    VStack(spacing: 16) {
-                        // 确认登记按钮（仅在验证通过时显示）
-                        if locationManager.territoryValidationPassed {
-                            confirmTerritoryButton
-                        }
-
-                        // 圈地按钮
-                        territoryButton
-
-                        // 定位按钮
-                        locationButton
+                    HStack {
+                        Spacer()
+                        confirmTerritoryButton
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 180)
                     }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 100)
                 }
             }
+
+            // 底部：水平按钮组（圈地 + 定位 + 探索）
+            VStack {
+                Spacer()
+                bottomButtonBar
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 100)
+            }
+        }
+        .sheet(isPresented: $showExplorationResult) {
+            ExplorationResultView(
+                result: MockExplorationData.sampleExplorationResult,
+                poiName: nil
+            )
         }
         .alert(isPresented: $showUploadAlert) {
             if uploadSuccess {
@@ -306,6 +315,54 @@ struct MapTabView: View {
         }
     }
 
+    /// 底部按钮栏（圈地 + 定位 + 探索）
+    private var bottomButtonBar: some View {
+        HStack(spacing: 12) {
+            // 左侧：圈地按钮
+            territoryButton
+                .frame(maxWidth: .infinity)
+
+            // 中间：定位按钮
+            locationButton
+
+            // 右侧：探索按钮
+            exploreButton
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// 探索按钮
+    private var exploreButton: some View {
+        Button {
+            handleExplore()
+        } label: {
+            HStack(spacing: 8) {
+                if isExploring {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                } else {
+                    Image(systemName: "binoculars.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+
+                Text(isExploring ? "探索中..." : "探索")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                isExploring
+                    ? ApocalypseTheme.textMuted
+                    : ApocalypseTheme.primary
+            )
+            .cornerRadius(25)
+            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+        }
+        .disabled(isExploring)
+    }
+
     /// 速度警告横幅
     private var speedWarningBanner: some View {
         HStack(spacing: 12) {
@@ -480,6 +537,25 @@ struct MapTabView: View {
         } catch {
             TerritoryLogger.shared.log("加载领地失败: \(error.localizedDescription)", type: .error)
             LogManager.shared.error("加载领地失败: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - 探索方法
+
+    /// 处理探索按钮点击
+    private func handleExplore() {
+        // 开始探索，进入加载状态
+        isExploring = true
+
+        // 模拟探索过程，1.5秒后完成
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            // 探索完成，恢复按钮状态
+            isExploring = false
+
+            // 弹出探索结果页面
+            showExplorationResult = true
+
+            LogManager.shared.info("探索完成，发现了新的物资")
         }
     }
 

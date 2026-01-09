@@ -1,6 +1,7 @@
 /* Main Tab Bar */
 "地图" = "Map";
 "领地" = "Territory";
+"资源" = "Resources";
 "个人" = "Profile";
 "更多" = "More";
 

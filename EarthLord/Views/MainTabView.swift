@@ -27,19 +27,26 @@ struct MainTabView: View {
                 }
                 .tag(1)
 
+            ResourcesTabView()
+                .tabItem {
+                    Image(systemName: "cube.box.fill")
+                    Text("资源".localized())
+                }
+                .tag(2)
+
             ProfileTabView()
                 .tabItem {
                     Image(systemName: "person.fill")
                     Text("个人".localized())
                 }
-                .tag(2)
+                .tag(3)
 
             MoreTabView()
                 .tabItem {
                     Image(systemName: "ellipsis")
                     Text("更多".localized())
                 }
-                .tag(3)
+                .tag(4)
         }
         .tint(ApocalypseTheme.primary)
         .refreshOnLanguageChange()
