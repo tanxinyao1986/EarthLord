@@ -128,18 +128,15 @@ struct PointOfInterest: Codable, Identifiable {
 struct ExplorationResult: Codable {
     // 本次探索数据
     let distanceWalked: Double          // 本次行走距离（米）
-    let areaExplored: Double            // 本次探索面积（平方米）
     let duration: TimeInterval          // 探索时长（秒）
     let itemsFound: [String: Int]       // 获得的物品（物品ID: 数量）
     let experienceGained: Int           // 获得经验值
 
     // 累计数据
     let totalDistanceWalked: Double     // 累计行走距离（米）
-    let totalAreaExplored: Double       // 累计探索面积（平方米）
 
     // 排名数据
     let distanceRanking: Int            // 行走距离排名
-    let areaRanking: Int                // 探索面积排名
 
     let timestamp: Date                 // 探索完成时间
 }
@@ -391,7 +388,6 @@ struct MockExplorationData {
     static let sampleExplorationResult = ExplorationResult(
         // 本次探索
         distanceWalked: 2500,           // 本次行走2500米
-        areaExplored: 50000,            // 本次探索5万平方米
         duration: 1800,                 // 探索时长30分钟（1800秒）
         itemsFound: [
             "material_wood": 5,         // 获得木材 x5
@@ -402,11 +398,9 @@ struct MockExplorationData {
 
         // 累计数据
         totalDistanceWalked: 15000,     // 累计行走15000米
-        totalAreaExplored: 250000,      // 累计探索25万平方米
 
         // 排名
         distanceRanking: 42,            // 行走距离排名第42
-        areaRanking: 38,                // 探索面积排名第38
 
         timestamp: Date()               // 当前时间
     )

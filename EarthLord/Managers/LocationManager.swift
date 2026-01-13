@@ -279,8 +279,8 @@ class LocationManager: NSObject, ObservableObject {
 
     // MARK: - 距离与面积计算
 
-    /// 计算路径总距离（米）
-    private func calculateTotalPathDistance() -> Double {
+    /// 计算路径总距离（米）- 公开方法供 ExplorationManager 使用
+    func calculateTotalPathDistance() -> Double {
         guard pathCoordinates.count >= 2 else { return 0 }
 
         var totalDistance: Double = 0

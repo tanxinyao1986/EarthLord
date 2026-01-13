@@ -38,9 +38,7 @@ struct ExplorationResultView: View {
 
     // MARK: - Animation State
     @State private var animatedDistance: Double = 0
-    @State private var animatedArea: Double = 0
     @State private var animatedTotalDistance: Double = 0
-    @State private var animatedTotalArea: Double = 0
     @State private var animatedExperience: Int = 0
     @State private var showItems: [Bool] = []
     @State private var showCheckmarks: [Bool] = []
@@ -268,19 +266,6 @@ struct ExplorationResultView: View {
                     current: "\(Int(animatedDistance))米",
                     total: "\(Int(animatedTotalDistance))米",
                     ranking: result.distanceRanking
-                )
-
-                Divider()
-                    .background(ApocalypseTheme.textMuted.opacity(0.3))
-
-                // 探索面积
-                statRow(
-                    icon: "map",
-                    iconColor: .green,
-                    title: "探索面积",
-                    current: formatArea(animatedArea),
-                    total: formatArea(animatedTotalArea),
-                    ranking: result.areaRanking
                 )
 
                 Divider()
@@ -555,15 +540,6 @@ struct ExplorationResultView: View {
 
     // MARK: - Helpers
 
-    /// 格式化面积
-    private func formatArea(_ area: Double) -> String {
-        if area >= 10000 {
-            return String(format: "%.1f万㎡", area / 10000)
-        } else {
-            return "\(Int(area))㎡"
-        }
-    }
-
     /// 格式化时长
     private func formatDuration(_ duration: TimeInterval) -> String {
         let minutes = Int(duration) / 60
@@ -609,8 +585,6 @@ struct ExplorationResultView: View {
         withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
             animatedDistance = result.distanceWalked
             animatedTotalDistance = result.totalDistanceWalked
-            animatedArea = result.areaExplored
-            animatedTotalArea = result.totalAreaExplored
         }
 
         // 经验值动画（延迟一点）

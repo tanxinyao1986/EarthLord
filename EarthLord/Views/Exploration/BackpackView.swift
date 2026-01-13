@@ -10,20 +10,27 @@ import SwiftUI
 /// 背包管理视图
 struct BackpackView: View {
     // MARK: - State
+    @StateObject private var inventoryManager = InventoryManager.shared
     @State private var searchText = ""
     @State private var selectedCategory: ItemCategory? = nil  // nil表示"全部"
-    @State private var inventoryItems: [InventoryItem] = MockExplorationData.inventoryItems
     @State private var animatedWeight: Double = 0  // 用于动画的重量值
     @State private var showItems = false  // 控制物品显示动画
+    @State private var isLoading = false
+    @State private var loadError: String?
 
     // 背包容量设置
     private let maxCapacity: Double = 100.0  // 最大容量（kg）
 
     // MARK: - Computed Properties
 
+    /// 背包物品列表
+    private var inventoryItems: [InventoryItem] {
+        inventoryManager.items
+    }
+
     /// 当前背包总重量
     private var currentWeight: Double {
-        inventoryItems.reduce(0) { $0 + $1.totalWeight }
+        inventoryManager.totalWeight
     }
 
     /// 容量使用百分比
@@ -72,32 +79,72 @@ struct BackpackView: View {
             ApocalypseTheme.background
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // 容量状态卡
-                capacityCard
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-
-                // 搜索框
-                searchBar
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-
-                // 分类筛选
-                categoryFilter
-                    .padding(.top, 12)
-
-                // 物品列表或空状态
-                if filteredItems.isEmpty {
-                    emptyState
-                } else {
-                    itemListView
+            if isLoading {
+                // 加载状态
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                    Text("加载中...")
+                        .font(.system(size: 14))
+                        .foregroundColor(ApocalypseTheme.textSecondary)
+                }
+            } else {
+                VStack(spacing: 0) {
+                    // 容量状态卡
+                    capacityCard
+                        .padding(.horizontal, 16)
                         .padding(.top, 16)
+
+                    // 搜索框
+                    searchBar
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+
+                    // 分类筛选
+                    categoryFilter
+                        .padding(.top, 12)
+
+                    // 物品列表或空状态
+                    if filteredItems.isEmpty {
+                        emptyState
+                    } else {
+                        itemListView
+                            .padding(.top, 16)
+                    }
                 }
             }
         }
         .navigationTitle("背包")
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await loadInventoryData()
+        }
+        .onAppear {
+            Task {
+                await loadInventoryData()
+            }
+        }
+    }
+
+    // MARK: - Data Loading
+
+    /// 加载背包数据
+    private func loadInventoryData() async {
+        isLoading = true
+        loadError = nil
+
+        do {
+            try await inventoryManager.loadInventory()
+            // 加载完成后动画显示重量
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+                animatedWeight = currentWeight
+            }
+        } catch {
+            loadError = error.localizedDescription
+            LogManager.shared.error("加载背包失败: \(error.localizedDescription)")
+        }
+
+        isLoading = false
     }
 
     // MARK: - Capacity Card
@@ -246,7 +293,7 @@ struct BackpackView: View {
         ScrollView {
             VStack(spacing: 12) {
                 ForEach(filteredItems) { item in
-                    ItemCardView(item: item)
+                    ItemCardView(item: item, itemDefinitions: inventoryManager.itemDefinitions)
                         .transition(.asymmetric(
                             insertion: .move(edge: .trailing).combined(with: .opacity),
                             removal: .move(edge: .leading).combined(with: .opacity)
@@ -256,12 +303,6 @@ struct BackpackView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 20)
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedCategory)
-        }
-        .onAppear {
-            // 启动时动画显示重量
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
-                animatedWeight = currentWeight
-            }
         }
         .onChange(of: currentWeight) { newWeight in
             // 重量变化时动画更新
@@ -363,6 +404,17 @@ struct CategoryButton: View {
 /// 物品卡片组件
 struct ItemCardView: View {
     let item: InventoryItem
+    var itemDefinitions: [ItemDefinition] = []
+
+    /// 获取物品定义（优先从传入的列表中查找，其次从 Mock 数据中查找）
+    private var itemDefinition: ItemDefinition? {
+        // 先从传入的列表中查找
+        if let def = itemDefinitions.first(where: { $0.id == item.itemId }) {
+            return def
+        }
+        // 兼容：从 Mock 数据中查找
+        return item.definition
+    }
 
     var body: some View {
         ELCard(padding: 14) {
@@ -373,7 +425,7 @@ struct ItemCardView: View {
                 // 中间物品信息
                 VStack(alignment: .leading, spacing: 6) {
                     // 物品名称
-                    Text(item.definition?.name ?? "未知物品")
+                    Text(itemDefinition?.name ?? "未知物品")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(ApocalypseTheme.textPrimary)
 
@@ -390,7 +442,7 @@ struct ItemCardView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "scalemass.fill")
                                 .font(.system(size: 11))
-                            Text("\(item.totalWeight, specifier: "%.1f")kg")
+                            Text("\(calculatedTotalWeight, specifier: "%.1f")kg")
                                 .font(.system(size: 13))
                         }
                         .foregroundColor(ApocalypseTheme.textSecondary)
@@ -408,7 +460,7 @@ struct ItemCardView: View {
                     }
 
                     // 稀有度标签
-                    if let rarity = item.definition?.rarity {
+                    if let rarity = itemDefinition?.rarity {
                         rarityBadge(rarity)
                     }
                 }
@@ -418,15 +470,20 @@ struct ItemCardView: View {
                 // 右侧操作按钮
                 VStack(spacing: 8) {
                     actionButton(title: "使用", icon: "hand.point.up.left.fill", color: ApocalypseTheme.info) {
-                        print("使用物品: \(item.definition?.name ?? "未知")")
+                        print("使用物品: \(itemDefinition?.name ?? "未知")")
                     }
 
                     actionButton(title: "存储", icon: "archivebox.fill", color: ApocalypseTheme.warning) {
-                        print("存储物品: \(item.definition?.name ?? "未知")")
+                        print("存储物品: \(itemDefinition?.name ?? "未知")")
                     }
                 }
             }
         }
+    }
+
+    /// 计算总重量
+    private var calculatedTotalWeight: Double {
+        (itemDefinition?.weight ?? 0) * Double(item.quantity)
     }
 
     // MARK: - Category Icon
@@ -445,7 +502,7 @@ struct ItemCardView: View {
 
     /// 分类颜色
     private var categoryColor: Color {
-        guard let category = item.definition?.category else {
+        guard let category = itemDefinition?.category else {
             return ApocalypseTheme.textMuted
         }
 
@@ -465,7 +522,7 @@ struct ItemCardView: View {
 
     /// 分类图标名称
     private var categoryIconName: String {
-        guard let category = item.definition?.category else {
+        guard let category = itemDefinition?.category else {
             return "questionmark"
         }
 
