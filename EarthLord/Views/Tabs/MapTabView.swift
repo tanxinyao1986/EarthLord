@@ -36,6 +36,10 @@ struct MapTabView: View {
     @State private var explorationError: String?
     @State private var showExplorationError: Bool = false
 
+    // Day22: POI 搜刮相关状态
+    @State private var showScavengeResult: Bool = false
+    @State private var scavengeResult: ScavengeResult?
+
     // MARK: - Day 19: 碰撞检测状态
     @State private var collisionCheckTimer: Timer?
     @State private var collisionWarning: String?
@@ -62,7 +66,9 @@ struct MapTabView: View {
                     isTracking: locationManager.isTracking,
                     isPathClosed: locationManager.isPathClosed,
                     territories: territories,
-                    currentUserId: authManager.currentUser?.id.uuidString
+                    currentUserId: authManager.currentUser?.id.uuidString,
+                    pois: explorationManager.nearbyPOIs,  // Day22: 传入 POI 列表
+                    poiUpdateVersion: explorationManager.poiUpdateVersion  // Day22: 触发刷新
                 )
                 .edgesIgnoringSafeArea(.all)
             } else {
@@ -114,6 +120,19 @@ struct MapTabView: View {
                 collisionWarningBanner(message: warning, level: collisionWarningLevel)
             }
 
+            // Day22: POI 接近弹窗
+            if explorationManager.showPOIPopup, let poi = explorationManager.currentPOI {
+                POIProximityPopup(
+                    poi: poi,
+                    onScavenge: {
+                        handleScavenge(poi: poi)
+                    },
+                    onDismiss: {
+                        explorationManager.dismissPOIPopup()
+                    }
+                )
+            }
+
             // 右下角：确认登记按钮（独立显示）
             if locationManager.territoryValidationPassed {
                 VStack {
@@ -140,6 +159,15 @@ struct MapTabView: View {
                 ExplorationResultView(
                     result: result,
                     poiName: nil
+                )
+            }
+        }
+        // Day22: 搜刮结果 Sheet
+        .sheet(isPresented: $showScavengeResult) {
+            if let result = scavengeResult {
+                ExplorationResultView(
+                    result: result.toExplorationResult(),
+                    poiName: result.poi.name
                 )
             }
         }
@@ -203,6 +231,12 @@ struct MapTabView: View {
             }
         }
         .refreshOnLanguageChange()
+        // Day22: 监听 POI 围栏进入事件
+        .onReceive(locationManager.$enteredPOI) { poi in
+            if let poi = poi, explorationManager.isExploring {
+                explorationManager.handlePOIEntered(poi)
+            }
+        }
         // 监听探索因超速失败
         .onReceive(explorationManager.$error) { errorMessage in
             if let error = errorMessage, !error.isEmpty {
@@ -655,25 +689,66 @@ struct MapTabView: View {
 
     /// 开始探索
     private func startExploration() async {
+        print("🎯 [MapTabView] startExploration() 被调用")
+
         // 检查用户是否已登录
         guard authManager.currentUser != nil else {
+            print("❌ [MapTabView] 用户未登录")
             explorationError = "请先登录后再开始探索"
             showExplorationError = true
             return
         }
 
+        print("🎯 [MapTabView] 用户已登录，开始探索...")
+
         do {
             try await explorationManager.startExploration()
-            LogManager.shared.info("开始探索行走")
+            print("🎯 [MapTabView] startExploration 成功，开始搜索 POI...")
+
+            // Day22: 搜索并监控附近 POI
+            do {
+                print("🎯 [MapTabView] 调用 searchAndMonitorPOIs()...")
+                try await explorationManager.searchAndMonitorPOIs()
+                print("🎯 [MapTabView] searchAndMonitorPOIs() 完成")
+            } catch {
+                // POI 搜索失败不影响探索，只记录日志
+                print("⚠️ [MapTabView] POI 搜索失败: \(error.localizedDescription)")
+            }
         } catch {
+            print("❌ [MapTabView] 开始探索失败: \(error.localizedDescription)")
             explorationError = error.localizedDescription
             showExplorationError = true
-            LogManager.shared.error("开始探索失败: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Day22: POI 搜刮方法
+
+    /// 处理 POI 搜刮
+    private func handleScavenge(poi: POI) {
+        Task {
+            do {
+                let result = try await explorationManager.scavengePOI(poi)
+                scavengeResult = result
+                showScavengeResult = true
+
+                // 震动反馈
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+
+                LogManager.shared.success("搜刮成功: \(poi.name)")
+            } catch {
+                explorationError = "搜刮失败: \(error.localizedDescription)"
+                showExplorationError = true
+                LogManager.shared.error("搜刮失败: \(error.localizedDescription)")
+            }
         }
     }
 
     /// 结束探索
     private func stopExploration() async {
+        // Day22: 停止 POI 监控
+        explorationManager.stopPOIMonitoring()
+
         do {
             let result = try await explorationManager.stopExploration()
             explorationResult = result

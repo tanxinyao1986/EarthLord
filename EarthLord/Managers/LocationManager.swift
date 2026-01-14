@@ -51,6 +51,14 @@ class LocationManager: NSObject, ObservableObject {
     /// 计算得到的领地面积（平方米）
     @Published var calculatedArea: Double = 0
 
+    // MARK: - Day22: POI 地理围栏属性
+
+    /// 当前进入的 POI（用于触发弹窗）
+    @Published var enteredPOI: POI?
+
+    /// 正在监控的 POI 列表
+    private(set) var monitoredPOIs: [String: POI] = [:]
+
     // MARK: - 私有属性
 
     /// CoreLocation 定位管理器
@@ -506,6 +514,75 @@ class LocationManager: NSObject, ObservableObject {
     var isDenied: Bool {
         authorizationStatus == .denied || authorizationStatus == .restricted
     }
+
+    // MARK: - Day22: POI 地理围栏方法
+
+    /// POI 围栏半径（米）
+    private let poiGeofenceRadius: Double = 50.0
+
+    /// 开始监控 POI 地理围栏
+    /// - Parameter pois: 要监控的 POI 列表
+    func startMonitoringPOIs(_ pois: [POI]) {
+        // 先停止所有现有监控
+        stopMonitoringAllPOIs()
+
+        LogManager.shared.info("[LocationManager] 开始监控 \(pois.count) 个 POI 围栏")
+
+        for poi in pois {
+            // 创建圆形围栏区域
+            let region = CLCircularRegion(
+                center: poi.coordinate,
+                radius: poiGeofenceRadius,
+                identifier: poi.id
+            )
+            region.notifyOnEntry = true
+            region.notifyOnExit = false  // 只监控进入
+
+            // 保存 POI 映射关系
+            monitoredPOIs[poi.id] = poi
+
+            // 开始监控
+            locationManager.startMonitoring(for: region)
+
+            LogManager.shared.info("[LocationManager] 围栏已创建: \(poi.category.emoji) \(poi.name)")
+        }
+
+        LogManager.shared.success("[LocationManager] POI 围栏监控已启动")
+    }
+
+    /// 停止监控所有 POI 地理围栏
+    func stopMonitoringAllPOIs() {
+        // 停止所有正在监控的区域
+        for region in locationManager.monitoredRegions {
+            if monitoredPOIs[region.identifier] != nil {
+                locationManager.stopMonitoring(for: region)
+            }
+        }
+
+        // 清空映射
+        monitoredPOIs.removeAll()
+        enteredPOI = nil
+
+        LogManager.shared.info("[LocationManager] 所有 POI 围栏监控已停止")
+    }
+
+    /// 停止监控单个 POI
+    /// - Parameter poiId: POI ID
+    func stopMonitoringPOI(_ poiId: String) {
+        for region in locationManager.monitoredRegions {
+            if region.identifier == poiId {
+                locationManager.stopMonitoring(for: region)
+                monitoredPOIs.removeValue(forKey: poiId)
+                LogManager.shared.info("[LocationManager] 已停止监控 POI: \(poiId)")
+                break
+            }
+        }
+    }
+
+    /// 清除当前进入的 POI 状态
+    func clearEnteredPOI() {
+        enteredPOI = nil
+    }
 }
 
 // MARK: - CLLocationManagerDelegate
@@ -543,5 +620,36 @@ extension LocationManager: CLLocationManagerDelegate {
             self.locationError = "定位失败：\(error.localizedDescription)"
         }
         LogManager.shared.error("定位失败：\(error.localizedDescription)")
+    }
+
+    // MARK: - Day22: 地理围栏代理方法
+
+    /// 进入地理围栏区域时调用
+    func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
+        guard let circularRegion = region as? CLCircularRegion else { return }
+
+        // 查找对应的 POI
+        if let poi = monitoredPOIs[circularRegion.identifier] {
+            LogManager.shared.info("[LocationManager] 进入 POI 围栏: \(poi.category.emoji) \(poi.name)")
+
+            // 更新状态，触发弹窗
+            DispatchQueue.main.async {
+                self.enteredPOI = poi
+            }
+        }
+    }
+
+    /// 离开地理围栏区域时调用（当前不使用）
+    func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
+        // 暂不处理离开事件
+    }
+
+    /// 地理围栏监控失败时调用
+    func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
+        if let region = region {
+            LogManager.shared.error("[LocationManager] 围栏监控失败 \(region.identifier): \(error.localizedDescription)")
+        } else {
+            LogManager.shared.error("[LocationManager] 围栏监控失败: \(error.localizedDescription)")
+        }
     }
 }

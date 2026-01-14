@@ -573,7 +573,7 @@ class AuthManager: ObservableObject {
     /// 监听 Supabase 的认证状态变化，自动更新 isAuthenticated
     private func startAuthStateListener() {
         authStateTask = Task {
-            for await (event, session) in await supabase.auth.authStateChanges {
+            for await (event, session) in supabase.auth.authStateChanges {
                 await handleAuthStateChange(event: event, session: session)
             }
         }

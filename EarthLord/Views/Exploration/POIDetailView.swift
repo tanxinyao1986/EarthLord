@@ -101,7 +101,7 @@ struct POIDetailView: View {
             }
             .frame(width: geometry.size.width, height: geometry.size.width * 0.9)
         }
-        .frame(height: UIScreen.main.bounds.height * 0.35)
+        .frame(height: 300)  // 固定高度，避免使用已废弃的 UIScreen.main
     }
 
     // MARK: - Info Card

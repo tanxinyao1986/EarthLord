@@ -31,6 +31,26 @@ class ExplorationManager: ObservableObject {
     @Published var isSpeedWarning: Bool = false  // 是否正在超速警告
     @Published var speedWarningCountdown: Int = 0  // 超速警告倒计时（秒）
 
+    // MARK: - Day22: POI 搜刮相关属性
+
+    /// 附近 POI 列表
+    @Published var nearbyPOIs: [POI] = []
+
+    /// 当前接近的 POI（用于显示弹窗）
+    @Published var currentPOI: POI?
+
+    /// 是否显示 POI 弹窗
+    @Published var showPOIPopup: Bool = false
+
+    /// 已搜刮的 POI ID 集合
+    @Published var scavengedPOIs: Set<String> = []
+
+    /// POI 搜索是否正在进行
+    @Published var isSearchingPOIs: Bool = false
+
+    /// POI 更新版本号（用于触发地图刷新）
+    @Published var poiUpdateVersion: Int = 0
+
     // MARK: - 私有属性
     private let supabase = SupabaseConfig.shared
     private let rewardGenerator = RewardGenerator.shared
@@ -43,6 +63,9 @@ class ExplorationManager: ObservableObject {
     private var lastRecordedLocation: CLLocation?
     private var lastLocationUpdateTime: Date?
     private var cancellables = Set<AnyCancellable>()
+
+    /// 当前位置（由 MapView 实时更新）
+    private var currentMapLocation: CLLocation?
 
     // MARK: - 配置常量
 
@@ -76,6 +99,81 @@ class ExplorationManager: ObservableObject {
     func setLocationManager(_ manager: LocationManager) {
         self.locationManager = manager
         LogManager.shared.info("[ExplorationManager] LocationManager 已设置")
+    }
+
+    /// 从地图接收位置更新（由 MapViewRepresentable 调用）
+    func updateLocation(_ location: CLLocation) {
+        currentMapLocation = location
+
+        // 如果正在探索，更新距离和检测 POI
+        guard isExploring else { return }
+
+        // 更新距离追踪
+        updateDistanceFromMapLocation(location)
+
+        // 检测 POI 接近
+        checkPOIProximity(location)
+    }
+
+    /// 检测是否接近任何 POI
+    private func checkPOIProximity(_ location: CLLocation) {
+        // 跳过已搜刮的 POI
+        let unscavengedPOIs = nearbyPOIs.filter { !scavengedPOIs.contains($0.id) }
+
+        for poi in unscavengedPOIs {
+            let poiLocation = CLLocation(latitude: poi.coordinate.latitude, longitude: poi.coordinate.longitude)
+            let distance = location.distance(from: poiLocation)
+
+            // 50米内触发弹窗
+            if distance <= 50 {
+                // 检查是否已有弹窗显示
+                guard !showPOIPopup else { return }
+
+                print("🎯 [POI] 接近 POI: \(poi.name), 距离: \(Int(distance))m")
+                handlePOIEntered(poi)
+                return
+            }
+        }
+    }
+
+    /// 从地图位置更新距离
+    private func updateDistanceFromMapLocation(_ location: CLLocation) {
+        let currentTime = Date()
+
+        if let lastLocation = lastRecordedLocation, let lastTime = lastLocationUpdateTime {
+            let distance = location.distance(from: lastLocation)
+            let timeInterval = currentTime.timeIntervalSince(lastTime)
+
+            // 计算速度（m/s）
+            let speed = timeInterval > 0 ? distance / timeInterval : 0
+            currentSpeed = speed
+            let speedKmh = speed * 3.6
+
+            // 检查速度是否超限
+            if speed > maxSpeedMs {
+                handleSpeedExceeded(speedKmh: speedKmh)
+            } else {
+                if isSpeedWarning {
+                    cancelSpeedWarning()
+                }
+
+                // 只有移动超过最小距离且速度正常才记录
+                if distance >= minimumMovementDistance {
+                    currentDistance += distance
+                    pathCoordinates.append(location.coordinate)
+                    lastRecordedLocation = location
+                    lastLocationUpdateTime = currentTime
+
+                    print("📏 [探索] 距离更新: +\(String(format: "%.1f", distance))m, 总计: \(Int(currentDistance))m")
+                }
+            }
+        } else {
+            // 记录起始点
+            lastRecordedLocation = location
+            lastLocationUpdateTime = currentTime
+            pathCoordinates.append(location.coordinate)
+            print("📍 [探索] 记录起始点: (\(location.coordinate.latitude), \(location.coordinate.longitude))")
+        }
     }
 
     // MARK: - 探索控制
@@ -127,8 +225,15 @@ class ExplorationManager: ObservableObject {
             // 开始计时器
             startDurationTimer()
 
-            // 开始距离和速度追踪
-            startDistanceTracking()
+            // ⚠️ 使用当前地图位置作为起始点（如果有的话）
+            if let mapLocation = currentMapLocation {
+                lastRecordedLocation = mapLocation
+                lastLocationUpdateTime = Date()
+                pathCoordinates.append(mapLocation.coordinate)
+                print("📍 [探索] 使用地图位置作为起始点")
+            }
+
+            // 注意：距离追踪现在由 updateLocation() 从地图更新驱动，不再使用定时器
 
             LogManager.shared.success("[ExplorationManager] 探索已开始")
             LogManager.shared.info("[ExplorationManager] 会话ID: \(response.id)")
@@ -299,7 +404,7 @@ class ExplorationManager: ObservableObject {
         LogManager.shared.info("[ExplorationManager] 启动时长计时器")
 
         durationTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self = self, self.isExploring else { return }
                 self.explorationDuration += 1
             }
@@ -311,7 +416,7 @@ class ExplorationManager: ObservableObject {
         LogManager.shared.info("[ExplorationManager] 启动距离追踪，间隔: \(distanceUpdateInterval)秒")
 
         distanceUpdateTimer = Timer.scheduledTimer(withTimeInterval: distanceUpdateInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.updateDistanceAndSpeed()
             }
         }
@@ -404,7 +509,7 @@ class ExplorationManager: ObservableObject {
         speedWarningTimer?.invalidate()
 
         speedWarningTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self = self else { return }
 
                 if self.speedWarningCountdown > 0 {
@@ -460,6 +565,164 @@ class ExplorationManager: ObservableObject {
         lastLocationUpdateTime = nil
         isSpeedWarning = false
         speedWarningCountdown = 0
+        // 注意：不重置 currentMapLocation，保留地图位置用于下次探索
+
+        // Day22: 重置 POI 状态
+        nearbyPOIs = []
+        currentPOI = nil
+        showPOIPopup = false
+        scavengedPOIs = []
+        isSearchingPOIs = false
+        poiUpdateVersion += 1  // 触发清除 POI 标记
+    }
+
+    // MARK: - Day22: POI 搜刮方法
+
+    /// 搜索附近 POI 并开始监控
+    func searchAndMonitorPOIs() async throws {
+        print("🚀 [ExplorationManager] searchAndMonitorPOIs 被调用")
+        print("🚀 [ExplorationManager] currentMapLocation: \(String(describing: currentMapLocation))")
+        print("🚀 [ExplorationManager] locationManager?.userLocation: \(String(describing: locationManager?.userLocation))")
+
+        // 优先使用地图位置，其次使用 locationManager 的位置
+        let location: CLLocationCoordinate2D
+        if let mapLoc = currentMapLocation {
+            location = mapLoc.coordinate
+            print("🚀 [ExplorationManager] 使用地图位置")
+        } else if let locMgrLoc = locationManager?.userLocation {
+            location = locMgrLoc
+            print("🚀 [ExplorationManager] 使用 LocationManager 位置")
+        } else {
+            print("❌ [ExplorationManager] 无法获取当前位置")
+            throw POISearchError.locationNotAvailable
+        }
+
+        isSearchingPOIs = true
+        print("🚀 [ExplorationManager] 开始搜索附近 POI...")
+        print("🚀 [ExplorationManager] 搜索中心点: (\(location.latitude), \(location.longitude))")
+
+        do {
+            // 搜索附近 POI
+            let pois = try await POISearchManager.shared.searchNearbyPOIs(center: location)
+
+            print("🚀 [ExplorationManager] 搜索返回 \(pois.count) 个 POI")
+
+            // 打印每个 POI 的信息
+            for (index, poi) in pois.enumerated() {
+                print("🚀 [ExplorationManager] POI[\(index)]: \(poi.category.emoji) \(poi.name) @ (\(poi.coordinate.latitude), \(poi.coordinate.longitude))")
+            }
+
+            // 更新 POI 列表
+            nearbyPOIs = pois
+            poiUpdateVersion += 1  // 触发地图刷新
+
+            print("🚀 [ExplorationManager] nearbyPOIs 已更新，数量: \(nearbyPOIs.count)")
+            print("🚀 [ExplorationManager] poiUpdateVersion: \(poiUpdateVersion)")
+
+            // 开始监控地理围栏
+            if let locationMgr = locationManager {
+                locationMgr.startMonitoringPOIs(pois)
+            }
+
+            isSearchingPOIs = false
+            print("✅ [ExplorationManager] POI 搜索完成，找到 \(pois.count) 个地点")
+
+        } catch {
+            isSearchingPOIs = false
+            print("❌ [ExplorationManager] POI 搜索失败: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// 处理进入 POI 围栏事件
+    /// - Parameter poi: 进入的 POI
+    func handlePOIEntered(_ poi: POI) {
+        // 检查是否已搜刮
+        guard !scavengedPOIs.contains(poi.id) else {
+            LogManager.shared.info("[ExplorationManager] POI 已搜刮过: \(poi.name)")
+            return
+        }
+
+        // 检查是否已有弹窗显示
+        guard !showPOIPopup else {
+            LogManager.shared.info("[ExplorationManager] 已有弹窗显示，跳过: \(poi.name)")
+            return
+        }
+
+        LogManager.shared.info("[ExplorationManager] 触发 POI 弹窗: \(poi.category.emoji) \(poi.name)")
+
+        // 显示弹窗
+        currentPOI = poi
+        showPOIPopup = true
+    }
+
+    /// 关闭 POI 弹窗
+    func dismissPOIPopup() {
+        showPOIPopup = false
+        currentPOI = nil
+        locationManager?.clearEnteredPOI()
+    }
+
+    /// 执行 POI 搜刮
+    /// - Parameter poi: 要搜刮的 POI
+    /// - Returns: 搜刮结果
+    func scavengePOI(_ poi: POI) async throws -> ScavengeResult {
+        LogManager.shared.info("[ExplorationManager] 开始搜刮: \(poi.category.emoji) \(poi.name)")
+
+        // 加载物品定义
+        let itemDefinitions: [ItemDefinition]
+        if inventoryManager.itemDefinitions.isEmpty {
+            itemDefinitions = try await inventoryManager.loadItemDefinitions()
+        } else {
+            itemDefinitions = inventoryManager.itemDefinitions
+        }
+
+        // 生成随机物品（1-3 种，每种 1-3 个）
+        var generatedItems: [String: Int] = [:]
+        let itemTypeCount = Int.random(in: 1...3)
+
+        for _ in 0..<itemTypeCount {
+            // 随机选择一个物品
+            if let randomItem = itemDefinitions.randomElement() {
+                let quantity = Int.random(in: 1...3)
+                generatedItems[randomItem.id, default: 0] += quantity
+            }
+        }
+
+        LogManager.shared.info("[ExplorationManager] 生成物品: \(generatedItems)")
+
+        // 添加到背包
+        if !generatedItems.isEmpty {
+            try await inventoryManager.addItems(generatedItems, explorationSessionId: currentSession?.id)
+            LogManager.shared.success("[ExplorationManager] 物品已添加到背包")
+        }
+
+        // 标记为已搜刮
+        scavengedPOIs.insert(poi.id)
+
+        // 更新 POI 列表中的状态
+        if let index = nearbyPOIs.firstIndex(where: { $0.id == poi.id }) {
+            nearbyPOIs[index].isScavenged = true
+            poiUpdateVersion += 1  // 触发地图刷新
+        }
+
+        // 关闭弹窗
+        dismissPOIPopup()
+
+        // 构建搜刮结果
+        let result = ScavengeResult(poi: poi, items: generatedItems)
+        LogManager.shared.success("[ExplorationManager] 搜刮完成: \(poi.name)")
+
+        return result
+    }
+
+    /// 停止 POI 监控
+    func stopPOIMonitoring() {
+        locationManager?.stopMonitoringAllPOIs()
+        nearbyPOIs = []
+        currentPOI = nil
+        showPOIPopup = false
+        LogManager.shared.info("[ExplorationManager] POI 监控已停止")
     }
 
     // MARK: - 辅助方法

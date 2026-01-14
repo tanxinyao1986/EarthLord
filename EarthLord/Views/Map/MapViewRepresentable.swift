@@ -34,6 +34,12 @@ struct MapViewRepresentable: UIViewRepresentable {
     /// 当前用户 ID
     var currentUserId: String?
 
+    /// Day22: 附近 POI 列表
+    var pois: [POI]
+
+    /// Day22: POI 更新版本号（触发地图刷新）
+    var poiUpdateVersion: Int
+
     // MARK: - UIViewRepresentable 协议方法
 
     /// 创建 MKMapView
@@ -61,11 +67,18 @@ struct MapViewRepresentable: UIViewRepresentable {
 
     /// 更新 MKMapView（当路径更新时调用）
     func updateUIView(_ uiView: MKMapView, context: Context) {
+        // 打印调试信息
+        print("📍 [MapView] updateUIView 被调用")
+        print("📍 [MapView] POI 数量: \(pois.count), 版本号: \(poiUpdateVersion)")
+
         // 当路径更新版本号变化时，重新渲染轨迹
         context.coordinator.updateTrackingPath(on: uiView, path: trackingPath, isClosed: isPathClosed)
 
         // 绘制所有领地
         context.coordinator.drawTerritories(on: uiView, territories: territories, currentUserId: currentUserId)
+
+        // Day22: 更新 POI 标记
+        context.coordinator.updatePOIAnnotations(on: uiView, pois: pois)
     }
 
     /// 创建 Coordinator（代理处理器）
@@ -111,6 +124,9 @@ struct MapViewRepresentable: UIViewRepresentable {
             // 更新绑定的位置（传递给外部）
             DispatchQueue.main.async {
                 self.parent.userLocation = location.coordinate
+
+                // ⚠️ 关键：同时通知 ExplorationManager 位置更新
+                ExplorationManager.shared.updateLocation(location)
             }
 
             // 如果已经居中过，不再自动居中（避免干扰用户拖动）
@@ -222,6 +238,105 @@ struct MapViewRepresentable: UIViewRepresentable {
             }
 
             print("🎨 绘制了 \(territories.count) 个领地")
+        }
+
+        // MARK: - Day22: POI 标记方法
+
+        /// 更新地图上的 POI 标记
+        func updatePOIAnnotations(on mapView: MKMapView, pois: [POI]) {
+            print("🗺️ [POI] updatePOIAnnotations 调用，POI 数量: \(pois.count)")
+
+            // 获取现有的 POI 标注
+            let existingPOIAnnotations = mapView.annotations.compactMap { $0 as? POIAnnotation }
+            let existingPOIIds = Set(existingPOIAnnotations.map { $0.poi.id })
+            let newPOIIds = Set(pois.map { $0.id })
+
+            print("🗺️ [POI] 现有标注: \(existingPOIAnnotations.count), 新 POI: \(pois.count)")
+
+            // 移除不再存在的 POI 标注
+            for annotation in existingPOIAnnotations {
+                if !newPOIIds.contains(annotation.poi.id) {
+                    mapView.removeAnnotation(annotation)
+                }
+            }
+
+            // 添加新的 POI 标注
+            for poi in pois {
+                if !existingPOIIds.contains(poi.id) {
+                    let annotation = POIAnnotation(poi: poi)
+                    mapView.addAnnotation(annotation)
+                    print("🗺️ [POI] 添加标注: \(poi.category.emoji) \(poi.name)")
+                } else {
+                    // 更新已有标注的状态（如 isScavenged）
+                    if let existingAnnotation = existingPOIAnnotations.first(where: { $0.poi.id == poi.id }) {
+                        if existingAnnotation.poi.isScavenged != poi.isScavenged {
+                            mapView.removeAnnotation(existingAnnotation)
+                            let updatedAnnotation = POIAnnotation(poi: poi)
+                            mapView.addAnnotation(updatedAnnotation)
+                        }
+                    }
+                }
+            }
+
+            if pois.count > 0 {
+                print("🎨 更新了 \(pois.count) 个 POI 标记")
+            }
+        }
+
+        /// 为 POI 标记提供自定义视图
+        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            // 忽略用户位置标注
+            if annotation is MKUserLocation {
+                return nil
+            }
+
+            // 处理 POI 标注
+            if let poiAnnotation = annotation as? POIAnnotation {
+                print("🏷️ [POI] mapView(_:viewFor:) 被调用: \(poiAnnotation.poi.name)")
+
+                let identifier = "POIAnnotation"
+                var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+
+                if annotationView == nil {
+                    annotationView = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                    annotationView?.canShowCallout = true
+                    print("🏷️ [POI] 创建新的 MKMarkerAnnotationView")
+                } else {
+                    annotationView?.annotation = annotation
+                    print("🏷️ [POI] 复用已有的 MKMarkerAnnotationView")
+                }
+
+                // 设置标记样式
+                let poi = poiAnnotation.poi
+
+                // 根据是否已搜刮设置颜色
+                if poi.isScavenged {
+                    annotationView?.markerTintColor = .gray
+                    annotationView?.glyphImage = UIImage(systemName: "checkmark")
+                } else {
+                    // 根据类型设置颜色
+                    switch poi.category {
+                    case .hospital, .pharmacy:
+                        annotationView?.markerTintColor = .systemRed
+                    case .restaurant, .cafe:
+                        annotationView?.markerTintColor = .systemOrange
+                    case .gasStation:
+                        annotationView?.markerTintColor = .systemYellow
+                    default:
+                        annotationView?.markerTintColor = .systemBlue
+                    }
+
+                    // 设置类型图标
+                    annotationView?.glyphImage = UIImage(systemName: poi.category.icon)
+                }
+
+                annotationView?.displayPriority = .required
+
+                print("🏷️ [POI] 返回标注视图: \(poi.category.emoji) \(poi.name) @ (\(poi.coordinate.latitude), \(poi.coordinate.longitude))")
+                return annotationView
+            }
+
+            return nil
         }
 
         /// ⭐⭐⭐ 关键方法：为轨迹线提供渲染器（否则轨迹不显示！）

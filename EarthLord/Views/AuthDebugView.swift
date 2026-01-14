@@ -161,13 +161,8 @@ struct AuthDebugView: View {
                 // 尝试简单的查询测试连接
                 addLog("📡 测试 API 连接...")
 
-                let session = try? await supabase.auth.session
-                if session != nil {
-                    addLog("✅ 已有会话，连接正常")
-                } else {
-                    addLog("ℹ️ 无活动会话，但连接可用")
-                }
-
+                let session = try await supabase.auth.session
+                addLog("✅ 已有会话，用户: \(session.user.email ?? "未知")")
                 addLog("✅ 连接测试成功")
             } catch {
                 addLog("❌ 连接测试失败: \(error.localizedDescription)")

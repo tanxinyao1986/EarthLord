@@ -304,7 +304,7 @@ struct BackpackView: View {
             .padding(.bottom, 20)
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedCategory)
         }
-        .onChange(of: currentWeight) { newWeight in
+        .onChange(of: currentWeight) { _, newWeight in
             // 重量变化时动画更新
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                 animatedWeight = newWeight

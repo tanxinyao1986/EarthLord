@@ -194,7 +194,7 @@ struct POIListView: View {
                 .onAppear {
                     showItems = true
                 }
-                .onChange(of: selectedCategory) { _ in
+                .onChange(of: selectedCategory) { _, _ in
                     // 切换分类时重新播放动画
                     withAnimation {
                         showItems = false
