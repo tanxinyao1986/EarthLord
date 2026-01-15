@@ -58,13 +58,16 @@ class POISearchManager {
     /// - Parameters:
     ///   - center: 搜索中心点坐标
     ///   - radius: 搜索半径（米），默认 1000 米
+    ///   - limit: POI数量限制（默认20个，用于动态调整）
     /// - Returns: POI 数组
-    func searchNearbyPOIs(center: CLLocationCoordinate2D, radius: Double? = nil) async throws -> [POI] {
+    func searchNearbyPOIs(center: CLLocationCoordinate2D, radius: Double? = nil, limit: Int? = nil) async throws -> [POI] {
         let effectiveRadius = radius ?? searchRadius
+        let effectiveLimit = limit ?? maxPOICount
 
         LogManager.shared.info("[POISearchManager] 开始搜索附近 POI")
         LogManager.shared.info("[POISearchManager] 中心点: (\(String(format: "%.6f", center.latitude)), \(String(format: "%.6f", center.longitude)))")
         LogManager.shared.info("[POISearchManager] 搜索半径: \(Int(effectiveRadius))米")
+        LogManager.shared.info("[POISearchManager] POI数量限制: \(effectiveLimit)个")
 
         var allPOIs: [POI] = []
 
@@ -100,12 +103,18 @@ class POISearchManager {
             poi1.distance(to: center) < poi2.distance(to: center)
         }
 
-        // 限制最大数量
-        if sortedPOIs.count > maxPOICount {
-            sortedPOIs = Array(sortedPOIs.prefix(maxPOICount))
+        // Day23: 限制POI数量（动态调整）
+        if sortedPOIs.count > effectiveLimit {
+            sortedPOIs = Array(sortedPOIs.prefix(effectiveLimit))
         }
 
-        LogManager.shared.success("[POISearchManager] 搜索完成，找到 \(sortedPOIs.count) 个 POI")
+        // Day23: 保底策略 - 如果1公里内没有POI，扩展到2公里搜索
+        if sortedPOIs.isEmpty && effectiveRadius <= 1000 {
+            LogManager.shared.warning("[POISearchManager] 1公里内无POI，扩展到2公里搜索")
+            return try await searchNearbyPOIs(center: center, radius: 2000, limit: effectiveLimit)
+        }
+
+        LogManager.shared.success("[POISearchManager] 搜索完成，找到 \(sortedPOIs.count) 个 POI（限制: \(effectiveLimit)个）")
 
         // 打印找到的 POI
         for (index, poi) in sortedPOIs.enumerated() {

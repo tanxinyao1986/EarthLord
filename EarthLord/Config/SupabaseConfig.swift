@@ -25,7 +25,9 @@ struct SupabaseConfig {
 
     /// 全局共享的 Supabase 客户端实例
     /// 用于整个应用中的数据库操作和认证
-    static let shared: SupabaseClient = {
+    /// SupabaseClient 已经是 Sendable 类型，可以安全地跨 actor 使用
+    /// 使用 nonisolated(unsafe) 以允许从 nonisolated 上下文访问
+    nonisolated(unsafe) static let shared: SupabaseClient = {
         guard let url = URL(string: supabaseURL) else {
             fatalError("Invalid Supabase URL")
         }

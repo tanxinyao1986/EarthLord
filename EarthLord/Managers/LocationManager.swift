@@ -11,6 +11,9 @@ import Combine  // ⚠️ 重要：@Published 需要这个框架
 
 // MARK: - LocationManager 主类
 class LocationManager: NSObject, ObservableObject {
+    // MARK: - 单例
+    static let shared = LocationManager()
+
     // MARK: - Published 属性（自动通知 SwiftUI 更新）
 
     /// 用户当前位置坐标
@@ -64,8 +67,8 @@ class LocationManager: NSObject, ObservableObject {
     /// CoreLocation 定位管理器
     private let locationManager = CLLocationManager()
 
-    /// 当前位置（用于定时器采点）
-    private var currentLocation: CLLocation?
+    /// 当前位置（用于定时器采点和位置上报）
+    private(set) var currentLocation: CLLocation?
 
     /// 路径追踪定时器（每 2 秒采一次点）
     private var pathUpdateTimer: Timer?
@@ -611,6 +614,11 @@ extension LocationManager: CLLocationManagerDelegate {
         DispatchQueue.main.async {
             self.userLocation = location.coordinate
             self.locationError = nil
+        }
+
+        // Day23: 触发位置上报检查（移动50米触发）
+        Task { @MainActor in
+            await PlayerDensityManager.shared.checkAndReportIfNeeded(location)
         }
     }
 

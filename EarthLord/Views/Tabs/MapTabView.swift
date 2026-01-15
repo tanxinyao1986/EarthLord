@@ -11,7 +11,7 @@ import MapKit
 struct MapTabView: View {
     // MARK: - 状态管理
 
-    @StateObject private var locationManager = LocationManager()
+    @StateObject private var locationManager = LocationManager.shared
     @StateObject private var explorationManager = ExplorationManager.shared
     @ObservedObject private var languageManager = LanguageManager.shared
     @ObservedObject private var authManager = AuthManager.shared
@@ -702,18 +702,9 @@ struct MapTabView: View {
         print("🎯 [MapTabView] 用户已登录，开始探索...")
 
         do {
+            // Day23: startExploration 现在内部已包含密度查询和动态POI搜索
             try await explorationManager.startExploration()
-            print("🎯 [MapTabView] startExploration 成功，开始搜索 POI...")
-
-            // Day22: 搜索并监控附近 POI
-            do {
-                print("🎯 [MapTabView] 调用 searchAndMonitorPOIs()...")
-                try await explorationManager.searchAndMonitorPOIs()
-                print("🎯 [MapTabView] searchAndMonitorPOIs() 完成")
-            } catch {
-                // POI 搜索失败不影响探索，只记录日志
-                print("⚠️ [MapTabView] POI 搜索失败: \(error.localizedDescription)")
-            }
+            print("🎯 [MapTabView] startExploration 成功（已完成密度查询和POI搜索）")
         } catch {
             print("❌ [MapTabView] 开始探索失败: \(error.localizedDescription)")
             explorationError = error.localizedDescription

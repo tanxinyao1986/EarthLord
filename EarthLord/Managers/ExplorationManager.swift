@@ -239,6 +239,38 @@ class ExplorationManager: ObservableObject {
             LogManager.shared.info("[ExplorationManager] 会话ID: \(response.id)")
             LogManager.shared.info("[ExplorationManager] 最大速度限制: \(maxSpeedKmh) km/h (\(String(format: "%.2f", maxSpeedMs)) m/s)")
 
+            // Day23: 查询附近玩家密度并动态调整POI数量
+            LogManager.shared.info("[ExplorationManager] 🔍 开始密度查询流程...")
+
+            if let mapLocation = currentMapLocation {
+                LogManager.shared.info("[ExplorationManager] 📍 当前地图位置: (\(mapLocation.coordinate.latitude), \(mapLocation.coordinate.longitude))")
+
+                do {
+                    LogManager.shared.info("[ExplorationManager] 🌐 正在查询附近玩家密度...")
+                    let densityLevel = try await PlayerDensityManager.shared.queryNearbyPlayerDensity(mapLocation)
+                    let poiLimit = densityLevel.poiCount
+
+                    LogManager.shared.success("""
+                    [ExplorationManager] ✅ 密度查询成功
+                    - 密度等级: \(densityLevel.description) (\(densityLevel.detailedDescription))
+                    - POI数量限制: \(poiLimit)个
+                    """)
+
+                    // 搜索POI（传入动态数量）
+                    LogManager.shared.info("[ExplorationManager] 🔎 开始搜索POI，限制数量: \(poiLimit)")
+                    try await searchAndMonitorPOIs(limit: poiLimit)
+                } catch {
+                    LogManager.shared.error("[ExplorationManager] ❌ 密度查询失败: \(error.localizedDescription)")
+                    LogManager.shared.warning("[ExplorationManager] ⚠️ 降级处理：使用默认POI数量 3")
+                    // 兜底：使用低密度默认数量（3个）
+                    try await searchAndMonitorPOIs(limit: 3)
+                }
+            } else {
+                LogManager.shared.error("[ExplorationManager] ❌ 地图位置不可用，无法查询密度")
+                LogManager.shared.warning("[ExplorationManager] ⚠️ 降级处理：使用默认POI数量 3")
+                try await searchAndMonitorPOIs(limit: 3)
+            }
+
         } catch {
             LogManager.shared.error("[ExplorationManager] 创建探索会话失败: \(error.localizedDescription)")
             throw ExplorationError.databaseError(error.localizedDescription)
@@ -579,8 +611,9 @@ class ExplorationManager: ObservableObject {
     // MARK: - Day22: POI 搜刮方法
 
     /// 搜索附近 POI 并开始监控
-    func searchAndMonitorPOIs() async throws {
-        print("🚀 [ExplorationManager] searchAndMonitorPOIs 被调用")
+    /// - Parameter limit: POI数量限制（默认20个）
+    func searchAndMonitorPOIs(limit: Int = 20) async throws {
+        print("🚀 [ExplorationManager] searchAndMonitorPOIs 被调用，limit: \(limit)")
         print("🚀 [ExplorationManager] currentMapLocation: \(String(describing: currentMapLocation))")
         print("🚀 [ExplorationManager] locationManager?.userLocation: \(String(describing: locationManager?.userLocation))")
 
@@ -602,8 +635,11 @@ class ExplorationManager: ObservableObject {
         print("🚀 [ExplorationManager] 搜索中心点: (\(location.latitude), \(location.longitude))")
 
         do {
-            // 搜索附近 POI
-            let pois = try await POISearchManager.shared.searchNearbyPOIs(center: location)
+            // Day23: 搜索附近 POI（传入动态数量）
+            let pois = try await POISearchManager.shared.searchNearbyPOIs(
+                center: location,
+                limit: limit
+            )
 
             print("🚀 [ExplorationManager] 搜索返回 \(pois.count) 个 POI")
 

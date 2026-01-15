@@ -12,7 +12,7 @@ import Combine
 // MARK: - 日志级别枚举
 
 /// 日志级别（用于区分不同类型的日志）
-enum LogLevel: String, CaseIterable {
+enum LogLevel: String, CaseIterable, Sendable {
     case info = "INFO"       // 普通信息（蓝色）
     case success = "SUCCESS" // 成功事件（绿色）
     case warning = "WARNING" // 警告信息（橙色）
@@ -50,14 +50,14 @@ enum LogLevel: String, CaseIterable {
 // MARK: - 日志条目
 
 /// 单条日志记录
-struct LogEntry: Identifiable {
+struct LogEntry: Identifiable, Sendable {
     let id = UUID()          // 唯一标识符（用于 SwiftUI List）
     let timestamp: Date      // 时间戳
     let level: LogLevel      // 日志级别
     let message: String      // 日志内容
 
     /// 格式化的时间字符串（HH:mm:ss）
-    var timeString: String {
+    nonisolated var timeString: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
         return formatter.string(from: timestamp)
@@ -65,7 +65,7 @@ struct LogEntry: Identifiable {
 
     /// 格式化的完整日志（用于控制台输出）
     /// 格式：[12:30:01] [INFO] 开始圈地追踪
-    var formattedLog: String {
+    nonisolated var formattedLog: String {
         "[\(timeString)] [\(level.rawValue)] \(message)"
     }
 }
@@ -77,7 +77,10 @@ class LogManager: ObservableObject {
     // MARK: - 单例模式
 
     /// ⭐ 全局唯一实例（整个App只用这一个）
-    static let shared = LogManager()
+    /// LogManager 是 Sendable 类型，可以安全地跨 actor 使用
+    /// 日志方法已标记为 nonisolated 并内部处理线程安全
+    /// 使用 nonisolated(unsafe) 以允许从 nonisolated 上下文访问
+    nonisolated(unsafe) static let shared = LogManager()
 
     // MARK: - Published 属性
 
@@ -90,7 +93,8 @@ class LogManager: ObservableObject {
     private let maxLogs = 1000
 
     /// 是否同时输出到控制台
-    var printToConsole = true
+    /// 标记为 nonisolated 以允许从任何线程访问（简单的布尔配置）
+    nonisolated(unsafe) var printToConsole = true
 
     // MARK: - 初始化
 
@@ -105,7 +109,8 @@ class LogManager: ObservableObject {
     /// - Parameters:
     ///   - message: 日志内容
     ///   - level: 日志级别（默认为 .info）
-    func log(_ message: String, level: LogLevel = .info) {
+    /// 标记为 nonisolated 因为内部已使用 DispatchQueue.main.async 处理线程安全
+    nonisolated func log(_ message: String, level: LogLevel = .info) {
         let entry = LogEntry(
             timestamp: Date(),
             level: level,
@@ -131,22 +136,22 @@ class LogManager: ObservableObject {
     // MARK: - 便捷方法（语义化调用）
 
     /// 记录普通信息（蓝色）
-    func info(_ message: String) {
+    nonisolated func info(_ message: String) {
         log(message, level: .info)
     }
 
     /// 记录成功事件（绿色）
-    func success(_ message: String) {
+    nonisolated func success(_ message: String) {
         log(message, level: .success)
     }
 
     /// 记录警告信息（橙色）
-    func warning(_ message: String) {
+    nonisolated func warning(_ message: String) {
         log(message, level: .warning)
     }
 
     /// 记录错误信息（红色）
-    func error(_ message: String) {
+    nonisolated func error(_ message: String) {
         log(message, level: .error)
     }
 
