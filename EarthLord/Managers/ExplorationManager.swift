@@ -699,57 +699,84 @@ class ExplorationManager: ObservableObject {
         locationManager?.clearEnteredPOI()
     }
 
-    /// 执行 POI 搜刮
+    /// 执行 POI 搜刮（使用 AI 生成物品）
     /// - Parameter poi: 要搜刮的 POI
-    /// - Returns: 搜刮结果
-    func scavengePOI(_ poi: POI) async throws -> ScavengeResult {
-        LogManager.shared.info("[ExplorationManager] 开始搜刮: \(poi.category.emoji) \(poi.name)")
+    /// - Returns: AI 搜刮结果（包含独特名称和故事）
+    func scavengePOI(_ poi: POI) async throws -> AIScavengeResult {
+        LogManager.shared.info("[ExplorationManager] 开始搜刮: \(poi.category.emoji) \(poi.name) (危险等级: \(poi.dangerLevel))")
 
-        // 加载物品定义
-        let itemDefinitions: [ItemDefinition]
-        if inventoryManager.itemDefinitions.isEmpty {
-            itemDefinitions = try await inventoryManager.loadItemDefinitions()
-        } else {
-            itemDefinitions = inventoryManager.itemDefinitions
+        // 1. 调用 AI 生成物品
+        let aiItems: [AIGeneratedItem]
+        do {
+            aiItems = try await AIItemGenerator.shared.generateItems(for: poi)
+            LogManager.shared.success("[ExplorationManager] AI 生成 \(aiItems.count) 个物品")
+        } catch {
+            LogManager.shared.warning("[ExplorationManager] AI 生成失败，使用降级方案: \(error.localizedDescription)")
+            // 降级：使用本地生成
+            aiItems = AIItemGenerator.shared.generateFallbackItems(for: poi, count: Int.random(in: 1...3))
         }
 
-        // 生成随机物品（1-3 种，每种 1-3 个）
+        // 2. 将 AI 物品映射到系统物品 ID（用于背包存储）
         var generatedItems: [String: Int] = [:]
-        let itemTypeCount = Int.random(in: 1...3)
-
-        for _ in 0..<itemTypeCount {
-            // 随机选择一个物品
-            if let randomItem = itemDefinitions.randomElement() {
-                let quantity = Int.random(in: 1...3)
-                generatedItems[randomItem.id, default: 0] += quantity
-            }
+        for aiItem in aiItems {
+            let itemId = findOrCreateItemId(for: aiItem)
+            generatedItems[itemId, default: 0] += aiItem.quantity
         }
 
-        LogManager.shared.info("[ExplorationManager] 生成物品: \(generatedItems)")
+        LogManager.shared.info("[ExplorationManager] 映射后物品: \(generatedItems)")
 
-        // 添加到背包
+        // 3. 添加到背包
         if !generatedItems.isEmpty {
             try await inventoryManager.addItems(generatedItems, explorationSessionId: currentSession?.id)
             LogManager.shared.success("[ExplorationManager] 物品已添加到背包")
         }
 
-        // 标记为已搜刮
+        // 4. 标记 POI 为已搜刮
         scavengedPOIs.insert(poi.id)
-
-        // 更新 POI 列表中的状态
         if let index = nearbyPOIs.firstIndex(where: { $0.id == poi.id }) {
             nearbyPOIs[index].isScavenged = true
             poiUpdateVersion += 1  // 触发地图刷新
         }
 
-        // 关闭弹窗
+        // 5. 关闭弹窗
         dismissPOIPopup()
 
-        // 构建搜刮结果
-        let result = ScavengeResult(poi: poi, items: generatedItems)
-        LogManager.shared.success("[ExplorationManager] 搜刮完成: \(poi.name)")
+        // 6. 构建 AI 搜刮结果
+        let result = AIScavengeResult(
+            poi: poi,
+            aiItems: aiItems,
+            items: generatedItems
+        )
 
+        LogManager.shared.success("[ExplorationManager] 搜刮完成: \(poi.name)")
         return result
+    }
+
+    /// 根据 AI 生成的物品查找或映射系统物品 ID
+    private func findOrCreateItemId(for aiItem: AIGeneratedItem) -> String {
+        // 根据分类映射到系统预设物品
+        let categoryMapping: [ItemCategory: [String]] = [
+            .water: ["water_mineral"],
+            .food: ["food_canned"],
+            .medical: ["medical_bandage", "medical_medicine"],
+            .material: ["material_wood", "material_metal"],
+            .tool: ["tool_flashlight", "tool_rope"]
+        ]
+
+        let candidates = categoryMapping[aiItem.itemCategory] ?? ["material_wood"]
+
+        // 根据稀有度选择（稀有度越高选后面的）
+        let index: Int
+        switch aiItem.itemRarity {
+        case .common:
+            index = 0
+        case .uncommon:
+            index = min(1, candidates.count - 1)
+        case .rare, .epic, .legendary:
+            index = candidates.count - 1
+        }
+
+        return candidates[index]
     }
 
     /// 停止 POI 监控

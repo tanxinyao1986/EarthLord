@@ -15,6 +15,7 @@ enum ItemRarity: String, Codable {
     case uncommon = "罕见"    // 不太常见
     case rare = "稀有"        // 稀有物品
     case epic = "史诗"        // 非常稀有
+    case legendary = "传说"   // 极其罕见
 }
 
 // MARK: - 物品分类枚举

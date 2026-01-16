@@ -161,9 +161,14 @@ class POISearchManager {
 
             // 转换为 POI，并设置正确的类型
             let pois = mapItems.map { mapItem -> POI in
-                var poi = POI.fromKeywordSearch(mapItem: mapItem)
-                poi = POI(id: poi.id, name: poi.name, coordinate: poi.coordinate, category: POICategory.from(mapCategory: category))
-                return poi
+                let poiCategory = POICategory.from(mapCategory: category)
+                return POI(
+                    id: POI.generateId(from: mapItem),
+                    name: mapItem.name ?? "未知地点",
+                    coordinate: mapItem.location.coordinate,
+                    category: poiCategory,
+                    dangerLevel: POI.generateDangerLevel(for: poiCategory)
+                )
             }
             print("🔍 [POI搜索] \(keyword) 转换为 \(pois.count) 个 POI")
             return pois

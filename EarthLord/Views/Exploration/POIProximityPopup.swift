@@ -237,7 +237,8 @@ struct POIProximityPopup: View {
             id: "test_poi",
             name: "沃尔玛超市",
             coordinate: CLLocationCoordinate2D(latitude: 31.2304, longitude: 121.4737),
-            category: .supermarket
+            category: .supermarket,
+            dangerLevel: 3
         ),
         onScavenge: { print("搜刮") },
         onDismiss: { print("关闭") }

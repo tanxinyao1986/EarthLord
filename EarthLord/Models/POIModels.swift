@@ -103,6 +103,30 @@ struct POI: Identifiable, Equatable {
     let coordinate: CLLocationCoordinate2D
     let category: POICategory
     var isScavenged: Bool = false         // 是否已搜刮
+    let dangerLevel: Int                  // 危险等级 (1-5)
+
+    // MARK: - 危险值生成
+
+    /// 根据 POI 类别获取基础危险值
+    static func baseDangerLevel(for category: POICategory) -> Int {
+        switch category {
+        case .pharmacy: return 1       // 药店：低危
+        case .cafe: return 1           // 咖啡店：低危
+        case .convenience: return 2    // 便利店：低危
+        case .restaurant: return 2     // 餐厅：低危
+        case .supermarket: return 3    // 超市：中危
+        case .store: return 3          // 商店：中危
+        case .gasStation: return 4     // 加油站：高危
+        case .hospital: return 5       // 医院：极危
+        }
+    }
+
+    /// 根据基础值随机浮动生成最终危险值
+    static func generateDangerLevel(for category: POICategory) -> Int {
+        let base = baseDangerLevel(for: category)
+        let variation = Int.random(in: -1...1)
+        return max(1, min(5, base + variation))
+    }
 
     /// 创建唯一 ID
     static func generateId(from mapItem: MKMapItem) -> String {
@@ -117,7 +141,8 @@ struct POI: Identifiable, Equatable {
             id: generateId(from: mapItem),
             name: mapItem.name ?? "未知地点",
             coordinate: mapItem.location.coordinate,
-            category: category
+            category: category,
+            dangerLevel: generateDangerLevel(for: category)
         )
     }
 
@@ -130,7 +155,8 @@ struct POI: Identifiable, Equatable {
             id: id,
             name: mapItem.name ?? "未知地点",
             coordinate: coordinate,
-            category: category
+            category: category,
+            dangerLevel: generateDangerLevel(for: category)
         )
     }
 

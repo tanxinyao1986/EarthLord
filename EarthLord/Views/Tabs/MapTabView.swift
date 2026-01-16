@@ -36,9 +36,9 @@ struct MapTabView: View {
     @State private var explorationError: String?
     @State private var showExplorationError: Bool = false
 
-    // Day22: POI 搜刮相关状态
+    // Day22: POI 搜刮相关状态（AI 生成物品）
     @State private var showScavengeResult: Bool = false
-    @State private var scavengeResult: ScavengeResult?
+    @State private var scavengeResult: AIScavengeResult?
 
     // MARK: - Day 19: 碰撞检测状态
     @State private var collisionCheckTimer: Timer?
@@ -162,13 +162,10 @@ struct MapTabView: View {
                 )
             }
         }
-        // Day22: 搜刮结果 Sheet
+        // Day22: 搜刮结果 Sheet（AI 生成物品）
         .sheet(isPresented: $showScavengeResult) {
             if let result = scavengeResult {
-                ExplorationResultView(
-                    result: result.toExplorationResult(),
-                    poiName: result.poi.name
-                )
+                AIScavengeResultView(result: result)
             }
         }
         .alert("探索失败", isPresented: $showExplorationError) {

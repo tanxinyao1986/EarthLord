@@ -568,6 +568,8 @@ struct ItemCardView: View {
             return .blue
         case .epic:
             return .purple
+        case .legendary:
+            return .orange
         }
     }
 
