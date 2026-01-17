@@ -26,35 +26,6 @@ struct MoreTabView: View {
                 // 用户信息区域
                 userProfileSection
 
-                // 开发测试区域
-                Section {
-                    NavigationLink(destination: LogView()) {
-                        Label {
-                            Text("运行日志".localized())
-                        } icon: {
-                            Image(systemName: "text.alignleft")
-                        }
-                    }
-
-                    NavigationLink(destination: SupabaseTestView()) {
-                        Label {
-                            Text("Supabase 连接测试".localized())
-                        } icon: {
-                            Image(systemName: "network")
-                        }
-                    }
-
-                    NavigationLink(destination: AuthDebugView()) {
-                        Label {
-                            Text("认证调试工具".localized())
-                        } icon: {
-                            Image(systemName: "person.badge.shield.checkmark")
-                        }
-                    }
-                } header: {
-                    Text("开发测试".localized())
-                }
-
                 // 退出登录
                 logoutSection
             }
